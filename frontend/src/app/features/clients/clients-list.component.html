@@ -1,0 +1,74 @@
+<div class="card p-3 shadow-sm">
+  <h5>Clients</h5>
+  <div *ngIf="error" class="alert alert-danger my-2">{{ error }}</div>
+
+  <!-- add form (simple row) -->
+  <div class="row g-2 my-3">
+    <div class="col-md-3">
+      <input class="form-control" placeholder="Name" [(ngModel)]="a.name" />
+    </div>
+    <div class="col-md-2">
+      <input class="form-control" placeholder="Code" [(ngModel)]="a.code" />
+    </div>
+    <div class="col-md-2">
+      <input class="form-control" placeholder="Email" [(ngModel)]="a.email" />
+    </div>
+    <div class="col-md-2">
+      <input class="form-control" placeholder="Phone" [(ngModel)]="a.phone" />
+    </div>
+    <div class="col-md-3"><button class="btn btn-primary w-100" (click)="add()">Add</button></div>
+  </div>
+
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th style="width: 60px">ID</th>
+        <th>Name</th>
+        <th>Code</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th style="width: 110px">Active</th>
+        <th style="width: 220px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let c of items">
+        <td>{{ c.id }}</td>
+
+        <ng-container *ngIf="editId !== c.id; else editRow">
+          <td>{{ c.name }}</td>
+          <td>{{ c.code }}</td>
+          <td>{{ c.email }}</td>
+          <td>{{ c.phone }}</td>
+          <td>{{ c.isActive ? '✅' : '❌' }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary me-2" (click)="startEdit(c)">
+              Edit
+            </button>
+            <button class="btn btn-sm btn-outline-danger" (click)="remove(c.id)">Delete</button>
+          </td>
+        </ng-container>
+
+        <ng-template #editRow>
+          <td><input class="form-control form-control-sm" [(ngModel)]="e!.name" /></td>
+          <td><input class="form-control form-control-sm" [(ngModel)]="e!.code" /></td>
+          <td><input class="form-control form-control-sm" [(ngModel)]="e!.email" /></td>
+          <td><input class="form-control form-control-sm" [(ngModel)]="e!.phone" /></td>
+          <td>
+            <input
+              class="form-check-input"
+              type="checkbox"
+              [(ngModel)]="e!.isActive"
+              id="ac{{ c.id }}"
+            />
+            <label class="form-check-label ms-1" for="ac{{ c.id }}">Active</label>
+          </td>
+          <td>
+            <button class="btn btn-sm btn-primary me-2" (click)="saveEdit()">Save</button>
+            <button class="btn btn-sm btn-secondary" (click)="cancelEdit()">Cancel</button>
+          </td>
+        </ng-template>
+      </tr>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,51 @@
+<div class="card p-3 shadow-sm">
+  <h5>Departments</h5>
+  <div *ngIf="error" class="alert alert-danger my-2">{{ error }}</div>
+
+  <div class="input-group my-3">
+    <input class="form-control" placeholder="New department name" [(ngModel)]="name" />
+    <button class="btn btn-primary" (click)="add()">Add</button>
+  </div>
+
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th style="width: 100px">ID</th>
+        <th>Name</th>
+        <th style="width: 110px">Active</th>
+        <th style="width: 200px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let d of items">
+        <td>{{ d.id }}</td>
+        <td *ngIf="editId !== d.id">{{ d.name }}</td>
+        <td *ngIf="editId === d.id">
+          <input class="form-control form-control-sm" [(ngModel)]="editName" />
+        </td>
+        <td *ngIf="editId !== d.id">{{ d.isActive ? '✅' : '❌' }}</td>
+        <td *ngIf="editId === d.id">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            [(ngModel)]="editActive"
+            id="ad{{ d.id }}"
+          />
+          <label class="form-check-label ms-1" for="ad{{ d.id }}">Active</label>
+        </td>
+        <td>
+          <ng-container *ngIf="editId !== d.id; else editing">
+            <button class="btn btn-sm btn-outline-secondary me-2" (click)="startEdit(d)">
+              Edit
+            </button>
+            <button class="btn btn-sm btn-outline-danger" (click)="remove(d.id)">Delete</button>
+          </ng-container>
+          <ng-template #editing>
+            <button class="btn btn-sm btn-primary me-2" (click)="saveEdit(d.id)">Save</button>
+            <button class="btn btn-sm btn-secondary" (click)="cancelEdit()">Cancel</button>
+          </ng-template>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

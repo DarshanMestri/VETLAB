@@ -1,0 +1,80 @@
+<div class="login-shell min-vh-100 px-3 py-4 py-md-5">
+  <div class="login-wrapper mx-auto">
+    <div class="login-hero p-4 p-md-5 text-white">
+      <span class="hero-chip mb-3">Vet LIMS Platform</span>
+      <h1 class="hero-title mb-3">Veterinary care workflows in one secure system</h1>
+      <p class="hero-copy mb-4">
+        Manage clinical, laboratory, billing, and inventory operations with traceable, role-based
+        access.
+      </p>
+      <ul class="hero-points list-unstyled mb-0">
+        <li>Clinical EMR and follow-up tracking</li>
+        <li>Laboratory sample-to-report workflow</li>
+        <li>Billing and inventory integration</li>
+      </ul>
+    </div>
+
+    <div class="login-form-panel p-4 p-md-5">
+      <div class="login-header mb-4">
+        <div class="login-kicker mb-2">Secure sign in</div>
+        <h3 class="mb-2">Welcome back</h3>
+        <p class="text-muted mb-0">Enter your account credentials to continue.</p>
+      </div>
+
+      <form (ngSubmit)="submit()">
+        <div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+
+        <div class="mb-3">
+          <label class="form-label">Lab Location</label>
+          <select
+            class="form-select"
+            [(ngModel)]="selectedClinicId"
+            name="clinicId"
+            (ngModelChange)="onClinicChange()"
+            [disabled]="loadingLocations"
+            required
+          >
+            <option [ngValue]="null">Select lab location</option>
+            <option *ngFor="let clinic of locations" [ngValue]="clinic.clinicId">
+              {{ clinic.clinicName }} ({{ clinic.clinicCode }})
+            </option>
+          </select>
+        </div>
+
+        <div class="mb-3" *ngIf="requiresBranchSelection">
+          <label class="form-label">Branch</label>
+          <select class="form-select" [(ngModel)]="selectedBranchId" name="branchId" required>
+            <option [ngValue]="null">Select branch</option>
+            <option *ngFor="let branch of selectedClinic?.branches ?? []" [ngValue]="branch.branchId">
+              {{ branch.branchName }} ({{ branch.branchCode }})
+            </option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Username or Email</label>
+          <input class="form-control" [(ngModel)]="usernameOrEmail" name="username" required />
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input
+            type="password"
+            class="form-control"
+            [(ngModel)]="password"
+            name="password"
+            required
+          />
+        </div>
+
+        <button class="btn btn-primary w-100 py-2" type="submit" [disabled]="loadingLocations">
+          {{ loadingLocations ? 'Loading locations...' : 'Login' }}
+        </button>
+      </form>
+
+      <div class="login-note text-muted small mt-4">
+        Can't sign in? Contact your system administrator for access.
+      </div>
+    </div>
+  </div>
+</div>

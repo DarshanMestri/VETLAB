@@ -1,0 +1,61 @@
+<nav class="navbar navbar-dark bg-dark px-3">
+  <a class="navbar-brand" routerLink="/dashboard">Vet LIMS</a>
+
+  <ul class="nav me-auto" *ngIf="auth.isAuthenticated()">
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+    </li>
+
+    <!-- Masters -->
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/clients" routerLinkActive="active">Clients</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/departments" routerLinkActive="active">Departments</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/units" routerLinkActive="active">Units</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/tests" routerLinkActive="active">Tests</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/profiles" routerLinkActive="active">Profiles</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/packages" routerLinkActive="active">Packages</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/rates" routerLinkActive="active">Rates</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/departments" routerLinkActive="active">Departments</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/units" routerLinkActive="active">Units</a>
+    </li>
+    <li class="nav-item" *ngIf="auth.hasAnyRole(['Admin', 'Manager'])">
+      <a class="nav-link" routerLink="/tests" routerLinkActive="active">Tests</a>
+    </li>
+
+    <!-- Workflows -->
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/registrations" routerLinkActive="active">Registrations</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/registrations/new" routerLinkActive="active">New Reg</a>
+    </li>
+  </ul>
+  <li class="nav-item">
+    <a class="nav-link" routerLink="/results" routerLinkActive="active">Results</a>
+  </li>
+
+  <div class="d-flex align-items-center text-white" *ngIf="auth.isAuthenticated(); else loginBtn">
+    <span class="me-3">Hi, {{ auth.getUsername() || 'User' }}</span>
+    <button class="btn btn-outline-light btn-sm" (click)="logout()">Logout</button>
+  </div>
+
+  <ng-template #loginBtn>
+    <a class="btn btn-outline-light btn-sm" routerLink="/login">Login</a>
+  </ng-template>
+</nav>

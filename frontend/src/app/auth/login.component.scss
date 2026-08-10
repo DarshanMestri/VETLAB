@@ -1,0 +1,114 @@
+.login-shell {
+  background:
+    radial-gradient(circle at 8% 12%, rgba(45, 212, 191, 0.2), transparent 30%),
+    radial-gradient(circle at 90% 0%, rgba(37, 99, 235, 0.14), transparent 36%),
+    linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+}
+
+.login-wrapper {
+  max-width: 1040px;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  box-shadow: 0 1.5rem 3rem rgba(15, 23, 42, 0.14);
+  background: #fff;
+}
+
+.login-hero {
+  background: linear-gradient(145deg, #0f766e 0%, #1d4ed8 65%, #1e293b 100%);
+}
+
+.hero-chip {
+  display: inline-block;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-title {
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 2rem);
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.hero-copy {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.hero-points li {
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0.45rem;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.hero-points li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+}
+
+.login-form-panel {
+  background: #fff;
+}
+
+.login-kicker {
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.form-control {
+  border-radius: 0.75rem;
+  border-color: #dbe5ef;
+  padding: 0.6rem 0.75rem;
+}
+
+.form-select {
+  border-radius: 0.75rem;
+  border-color: #dbe5ef;
+  padding: 0.6rem 0.75rem;
+}
+
+.form-control:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.16);
+}
+
+.form-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.16);
+}
+
+.btn-primary {
+  border-radius: 0.75rem;
+  border: none;
+  font-weight: 600;
+  background: linear-gradient(135deg, #0f766e 0%, #1d4ed8 100%);
+}
+
+.btn-primary:hover {
+  filter: brightness(0.97);
+}
+
+.login-note {
+  opacity: 0.82;
+}
+
+@media (min-width: 992px) {
+  .login-wrapper {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .login-hero {
+    display: none;
+  }
+}

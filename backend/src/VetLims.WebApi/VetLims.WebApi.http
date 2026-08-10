@@ -1,0 +1,6 @@
+@VetLims.WebApi_HostAddress = http://localhost:5035
+
+GET {{VetLims.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
