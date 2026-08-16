@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
+import { roleGuard } from './core/role.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -15,7 +16,14 @@ export const routes: Routes = [
       import('./dashboard/dashboard.component').then((m) => m.DashboardComponent),
     canActivate: [authGuard],
   },
-  { path: 'clinical', loadComponent: () => import('./features/clinical/clinical-workspace.component').then((m) => m.ClinicalWorkspaceComponent), canActivate: [authGuard] },
+  {
+    path: 'clinical',
+    loadComponent: () =>
+      import('./features/clinical/clinical-workspace.component').then(
+        (m) => m.ClinicalWorkspaceComponent,
+      ),
+    canActivate: [authGuard],
+  },
 
   {
     path: 'species',
@@ -33,17 +41,26 @@ export const routes: Routes = [
   },
   {
     path: 'owners',
-    loadComponent: () => import('./features/owners/owner-management.component').then((m) => m.OwnerManagementComponent),
+    loadComponent: () =>
+      import('./features/owners/owner-management.component').then(
+        (m) => m.OwnerManagementComponent,
+      ),
     canActivate: [authGuard],
   },
   {
     path: 'owners/:ownerId',
-    loadComponent: () => import('./features/owners/owner-management.component').then((m) => m.OwnerManagementComponent),
+    loadComponent: () =>
+      import('./features/owners/owner-management.component').then(
+        (m) => m.OwnerManagementComponent,
+      ),
     canActivate: [authGuard],
   },
   {
     path: 'owners/:ownerId/animals/:animalId',
-    loadComponent: () => import('./features/owners/owner-management.component').then((m) => m.OwnerManagementComponent),
+    loadComponent: () =>
+      import('./features/owners/owner-management.component').then(
+        (m) => m.OwnerManagementComponent,
+      ),
     canActivate: [authGuard],
   },
 
@@ -53,6 +70,32 @@ export const routes: Routes = [
       import('./features/masters/master-list.component').then((m) => m.MasterListComponent),
     data: { type: 'departments' },
     canActivate: [authGuard],
+  },
+
+  {
+    path: 'organizations',
+    loadComponent: () =>
+      import('./features/organizations/organizations-list.component').then(
+        (m) => m.OrganizationsListComponent,
+      ),
+    canActivate: [authGuard],
+  },
+
+  {
+    path: 'laboratory-groups',
+    loadComponent: () =>
+      import('./features/laboratory-groups/laboratory-groups-list.component').then(
+        (m) => m.LaboratoryGroupsListComponent,
+      ),
+    canActivate: [authGuard],
+  },
+
+  {
+    path: 'branches',
+    loadComponent: () =>
+      import('./features/branches/branches-list.component').then((m) => m.BranchesListComponent),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
   },
 
   {
@@ -103,7 +146,7 @@ export const routes: Routes = [
     path: 'registrations',
     loadComponent: () =>
       import('./features/registrations/registrations-list.component').then(
-        (m) => m.RegistrationsListComponent
+        (m) => m.RegistrationsListComponent,
       ),
     canActivate: [authGuard],
   },
@@ -112,7 +155,7 @@ export const routes: Routes = [
     path: 'registrations/new',
     loadComponent: () =>
       import('./features/registrations/registration-form.component').then(
-        (m) => m.RegistrationFormComponent
+        (m) => m.RegistrationFormComponent,
       ),
     canActivate: [authGuard],
   },
@@ -121,7 +164,7 @@ export const routes: Routes = [
     path: 'results',
     loadComponent: () =>
       import('./features/results/results-worklist.component').then(
-        (m) => m.ResultsWorklistComponent
+        (m) => m.ResultsWorklistComponent,
       ),
     canActivate: [authGuard],
   },
@@ -134,21 +177,35 @@ export const routes: Routes = [
   },
 
   {
+    path: 'users',
+    loadComponent: () =>
+      import('./features/users/users-master.component').then((m) => m.UsersMasterComponent),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
+  },
+
+  {
     path: 'whatsapp',
     loadComponent: () =>
-      import('./features/whatsapp/whatsapp-management.component').then((m) => m.WhatsAppManagementComponent),
+      import('./features/whatsapp/whatsapp-management.component').then(
+        (m) => m.WhatsAppManagementComponent,
+      ),
     canActivate: [authGuard],
   },
   {
     path: 'billing',
     loadComponent: () =>
-      import('./features/billing/billing-management.component').then((m) => m.BillingManagementComponent),
+      import('./features/billing/billing-management.component').then(
+        (m) => m.BillingManagementComponent,
+      ),
     canActivate: [authGuard],
   },
   {
     path: 'inventory-pharmacy',
     loadComponent: () =>
-      import('./features/inventory-pharmacy/inventory-pharmacy-management.component').then((m) => m.InventoryPharmacyManagementComponent),
+      import('./features/inventory-pharmacy/inventory-pharmacy-management.component').then(
+        (m) => m.InventoryPharmacyManagementComponent,
+      ),
     canActivate: [authGuard],
   },
 

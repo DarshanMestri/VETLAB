@@ -1,6 +1,6 @@
 namespace VetLims.Infrastructure.Entities;
 
-public class UserLocation : BaseEntity
+public class UserLocation : BaseEntity, IOrganizationOwned
 {
     public int UserId { get; set; }
     public global::VetLims.Infrastructure.Identity.AppUser? User { get; set; }

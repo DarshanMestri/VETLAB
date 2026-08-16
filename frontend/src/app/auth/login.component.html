@@ -1,80 +1,253 @@
-<div class="login-shell min-vh-100 px-3 py-4 py-md-5">
-  <div class="login-wrapper mx-auto">
-    <div class="login-hero p-4 p-md-5 text-white">
-      <span class="hero-chip mb-3">Vet LIMS Platform</span>
-      <h1 class="hero-title mb-3">Veterinary care workflows in one secure system</h1>
-      <p class="hero-copy mb-4">
-        Manage clinical, laboratory, billing, and inventory operations with traceable, role-based
-        access.
-      </p>
-      <ul class="hero-points list-unstyled mb-0">
-        <li>Clinical EMR and follow-up tracking</li>
-        <li>Laboratory sample-to-report workflow</li>
-        <li>Billing and inventory integration</li>
-      </ul>
+<div class="login-shell">
+  <div class="bg-layer" aria-hidden="true">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+    <span class="orb orb-4"></span>
+    <div class="grid-overlay"></div>
+    <div class="bg-paws" aria-hidden="true">
+      <svg class="paw paw-a" viewBox="0 0 64 64" fill="currentColor">
+        <circle cx="24" cy="22" r="6" />
+        <circle cx="40" cy="18" r="6" />
+        <circle cx="52" cy="26" r="6" />
+        <circle cx="16" cy="34" r="5" />
+        <path d="M10 44c0-8 8-12 18-12 11 0 24 5 26 14 1.5 6-3 12-9 10-4-1.4-5.5-3-8-3s-4 1.6-8 3c-5.6 1.6-19 1-19-12z" />
+      </svg>
+      <svg class="paw paw-b" viewBox="0 0 64 64" fill="currentColor">
+        <circle cx="24" cy="22" r="6" />
+        <circle cx="40" cy="18" r="6" />
+        <circle cx="52" cy="26" r="6" />
+        <circle cx="16" cy="34" r="5" />
+        <path d="M10 44c0-8 8-12 18-12 11 0 24 5 26 14 1.5 6-3 12-9 10-4-1.4-5.5-3-8-3s-4 1.6-8 3c-5.6 1.6-19 1-19-12z" />
+      </svg>
+      <span class="hex hex-a"></span>
+      <span class="hex hex-b"></span>
     </div>
+  </div>
 
-    <div class="login-form-panel p-4 p-md-5">
-      <div class="login-header mb-4">
-        <div class="login-kicker mb-2">Secure sign in</div>
-        <h3 class="mb-2">Welcome back</h3>
-        <p class="text-muted mb-0">Enter your account credentials to continue.</p>
-      </div>
-
-      <form (ngSubmit)="submit()">
-        <div *ngIf="error" class="alert alert-danger">{{ error }}</div>
-
-        <div class="mb-3">
-          <label class="form-label">Lab Location</label>
-          <select
-            class="form-select"
-            [(ngModel)]="selectedClinicId"
-            name="clinicId"
-            (ngModelChange)="onClinicChange()"
-            [disabled]="loadingLocations"
-            required
-          >
-            <option [ngValue]="null">Select lab location</option>
-            <option *ngFor="let clinic of locations" [ngValue]="clinic.clinicId">
-              {{ clinic.clinicName }} ({{ clinic.clinicCode }})
-            </option>
-          </select>
-        </div>
-
-        <div class="mb-3" *ngIf="requiresBranchSelection">
-          <label class="form-label">Branch</label>
-          <select class="form-select" [(ngModel)]="selectedBranchId" name="branchId" required>
-            <option [ngValue]="null">Select branch</option>
-            <option *ngFor="let branch of selectedClinic?.branches ?? []" [ngValue]="branch.branchId">
-              {{ branch.branchName }} ({{ branch.branchCode }})
-            </option>
-          </select>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Username or Email</label>
-          <input class="form-control" [(ngModel)]="usernameOrEmail" name="username" required />
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Password</label>
-          <input
-            type="password"
-            class="form-control"
-            [(ngModel)]="password"
-            name="password"
-            required
+  <div class="login-wrapper">
+    <aside class="hero-panel">
+      <div class="hero-fx" aria-hidden="true">
+        <div class="hero-glow"></div>
+        <svg class="dna" viewBox="0 0 120 520" fill="none">
+          <path
+            d="M60 0c30 26-30 26 0 52s-30 26 0 52 30 26 0 52-30 26 0 52 30 26 0 52-30 26 0 52 30 26 0 52-30 26 0 52 30 26 0 52-30 26 0 52 30 26 0 52-30 26 0 52 30 26 0 52-30 26 0 52 30 26 0 52"
+            stroke="currentColor"
+            stroke-width="2"
           />
+        </svg>
+        <span class="node node-a"></span>
+        <span class="node node-b"></span>
+        <span class="node node-c"></span>
+      </div>
+
+      <div class="hero-content">
+        <div class="brand-row">
+          <span class="brand-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3z" />
+            </svg>
+          </span>
+          <span class="brand-name">
+            <strong>Vet LIMS</strong>
+            <small>Laboratory Information System</small>
+          </span>
         </div>
 
-        <button class="btn btn-primary w-100 py-2" type="submit" [disabled]="loadingLocations">
-          {{ loadingLocations ? 'Loading locations...' : 'Login' }}
-        </button>
-      </form>
+        <span class="hero-chip">Veterinary LIMS Platform</span>
 
-      <div class="login-note text-muted small mt-4">
-        Can't sign in? Contact your system administrator for access.
+        <h1 class="hero-title">Precision diagnostics for modern veterinary practice</h1>
+        <p class="hero-copy">
+          One secure system for clinical care, laboratory workflows, billing, and inventory —
+          built for traceability and speed.
+        </p>
+
+        <ul class="hero-points">
+          <li>
+            <span class="point-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="5" y="4" width="14" height="17" rx="2" />
+                <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" />
+                <path d="M9 12h6M9 16h6" />
+              </svg>
+            </span>
+            <span>
+              <strong>Clinical EMR</strong>
+              <small>Encounters, follow-ups &amp; patient history</small>
+            </span>
+          </li>
+          <li>
+            <span class="point-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M10 2h4" />
+                <path d="M12 2v6l6.5 9.5A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-1.7-3.5L12 8" />
+                <path d="M8.5 14h7" />
+              </svg>
+            </span>
+            <span>
+              <strong>Lab Workflow</strong>
+              <small>Sample-to-report with traceable results</small>
+            </span>
+          </li>
+          <li>
+            <span class="point-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M3 6h18l-2 14H5L3 6z" />
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                <path d="M9 12h6" />
+              </svg>
+            </span>
+            <span>
+              <strong>Billing &amp; Inventory</strong>
+              <small>Integrated operations and pharmacy control</small>
+            </span>
+          </li>
+        </ul>
       </div>
-    </div>
+
+      <div class="hero-footer">
+        <span class="status-dot"></span>
+        <span>All systems operational</span>
+        <span class="hero-footer-sep">|</span>
+        <span>Role-based secure access</span>
+      </div>
+    </aside>
+
+    <section class="form-panel">
+      <div class="form-inner">
+        <div class="mobile-brand">
+          <span class="brand-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3z" />
+            </svg>
+          </span>
+          <span class="brand-name">
+            <strong>Vet LIMS</strong>
+            <small>Laboratory Information System</small>
+          </span>
+        </div>
+
+        <header class="form-header">
+          <div class="form-kicker">Secure sign in</div>
+          <h2>Welcome back</h2>
+          <p>Enter your account credentials to continue.</p>
+        </header>
+
+        <form (ngSubmit)="submit()" novalidate>
+          <div *ngIf="error" class="alert alert-danger alert-anim" role="alert">{{ error }}</div>
+
+          <div class="form-field field-1">
+            <label class="form-label" for="clinic">Lab Location</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z" />
+                  <circle cx="12" cy="10" r="2.6" />
+                </svg>
+              </span>
+              <select
+                id="clinic"
+                class="form-control"
+                [(ngModel)]="selectedClinicId"
+                name="clinicId"
+                (ngModelChange)="onClinicChange()"
+                [disabled]="loadingLocations"
+                required
+              >
+                <option [ngValue]="null">Select lab location</option>
+                <option *ngFor="let clinic of locations" [ngValue]="clinic.clinicId">
+                  {{ clinic.clinicName }} ({{ clinic.clinicCode }})
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-field field-2" *ngIf="requiresBranchSelection">
+            <label class="form-label" for="branch">Branch</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                  <path d="M2 12l10 5 10-5" />
+                  <path d="M2 17l10 5 10-5" />
+                </svg>
+              </span>
+              <select id="branch" class="form-control" [(ngModel)]="selectedBranchId" name="branchId" required>
+                <option [ngValue]="null">Select branch</option>
+                <option *ngFor="let branch of selectedClinic?.branches ?? []" [ngValue]="branch.branchId">
+                  {{ branch.branchName }} ({{ branch.branchCode }})
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-field field-3">
+            <label class="form-label" for="username">Username or Email</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+                  <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+                </svg>
+              </span>
+              <input
+                id="username"
+                class="form-control"
+                type="text"
+                [(ngModel)]="usernameOrEmail"
+                name="username"
+                autocomplete="username"
+                placeholder="you@clinic.com"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="form-field field-4">
+            <label class="form-label" for="password">Password</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect x="5" y="11" width="14" height="9" rx="2" />
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+              </span>
+              <input
+                id="password"
+                class="form-control"
+                type="password"
+                [(ngModel)]="password"
+                name="password"
+                autocomplete="current-password"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
+
+          <button class="btn-login field-5" type="submit" [disabled]="loadingLocations">
+            <span class="btn-shine" aria-hidden="true"></span>
+            <span class="btn-label">
+              {{ loadingLocations ? 'Loading locations…' : 'Sign In' }}
+            </span>
+            <svg
+              class="btn-arrow"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14" />
+              <path d="M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        </form>
+
+        <div class="form-footer">
+          <span>Can't sign in? Contact your system administrator for access.</span>
+        </div>
+      </div>
+    </section>
   </div>
 </div>

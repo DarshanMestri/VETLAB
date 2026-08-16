@@ -2,6 +2,9 @@ namespace VetLims.Infrastructure;
 
 public interface ICurrentUserService
 {
+    // True only for an explicitly established trusted system/background scope.
+    bool IsSystemExecution { get; }
+
     int? UserId { get; }
     string? UserName { get; }
 

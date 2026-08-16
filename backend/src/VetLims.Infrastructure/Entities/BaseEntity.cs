@@ -14,6 +14,7 @@ public abstract class BaseEntity
     public string? ModifiedBy { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedDate { get; set; }
+    public string? DeletedBy { get; set; }
 
     // Backward compatibility for existing models/controllers.
     public DateTime CreatedAt

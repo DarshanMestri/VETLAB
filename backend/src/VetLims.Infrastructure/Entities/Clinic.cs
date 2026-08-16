@@ -1,9 +1,11 @@
 namespace VetLims.Infrastructure.Entities;
 
-public class Clinic : BaseEntity
+public class Clinic : BaseEntity, IOrganizationOwned
 {
-    public int OrganizationId { get; set; }
     public Organization Organization { get; set; } = default!;
+
+    public int? LaboratoryGroupId { get; set; }
+    public LaboratoryGroup? LaboratoryGroup { get; set; }
 
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

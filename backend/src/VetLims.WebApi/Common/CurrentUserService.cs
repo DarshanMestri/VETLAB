@@ -7,6 +7,8 @@ public class CurrentUserService(IHttpContextAccessor httpContextAccessor) : ICur
 {
     private readonly System.Security.Claims.ClaimsPrincipal? _user = httpContextAccessor.HttpContext?.User;
 
+    public bool IsSystemExecution => false;
+
     public int? UserId
     {
         get

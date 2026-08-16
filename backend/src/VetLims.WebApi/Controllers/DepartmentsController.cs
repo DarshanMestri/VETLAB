@@ -10,12 +10,12 @@ namespace VetLims.WebApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")]
-public class DepartmentsController(VetLimsDbContext db) : ControllerBase
+public class DepartmentsController(VetLimsDbContext db, ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var q = db.Departments.AsNoTracking();
+        var q = db.Departments.AsNoTracking().Where(x => !x.IsDeleted);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = $"%{search.Trim()}%";
@@ -36,9 +36,9 @@ public class DepartmentsController(VetLimsDbContext db) : ControllerBase
 
         var code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
 
-        if (await db.Departments.AnyAsync(x => EF.Functions.ILike(x.Name, name)))
+        if (await db.Departments.AnyAsync(x => !x.IsDeleted && EF.Functions.ILike(x.Name, name)))
             return Conflict("Duplicate department not allowed.");
-        if (code is not null && await db.Departments.AnyAsync(x => x.Code != null && EF.Functions.ILike(x.Code, code)))
+        if (code is not null && await db.Departments.AnyAsync(x => !x.IsDeleted && x.Code != null && EF.Functions.ILike(x.Code, code)))
             return Conflict("Duplicate department not allowed.");
 
         var e = new Department { Name = name, Code = code, IsActive = dto.IsActive };
@@ -68,7 +68,7 @@ public class DepartmentsController(VetLimsDbContext db) : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<DepartmentDto>> Get(int id)
     {
-        var e = await db.Departments.FindAsync(id);
+        var e = await db.Departments.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
         return new DepartmentDto(e.Id, e.Name, e.Code, e.IsActive);
     }
@@ -76,7 +76,7 @@ public class DepartmentsController(VetLimsDbContext db) : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<ActionResult<DepartmentDto>> Update(int id, DepartmentUpdateDto dto)
     {
-        var e = await db.Departments.FindAsync(id);
+        var e = await db.Departments.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
 
         var name = dto.Name?.Trim();
@@ -85,9 +85,9 @@ public class DepartmentsController(VetLimsDbContext db) : ControllerBase
 
         var code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
 
-        if (await db.Departments.AnyAsync(x => x.Id != id && EF.Functions.ILike(x.Name, name)))
+        if (await db.Departments.AnyAsync(x => x.Id != id && !x.IsDeleted && EF.Functions.ILike(x.Name, name)))
             return Conflict("Duplicate department not allowed.");
-        if (code is not null && await db.Departments.AnyAsync(x => x.Id != id && x.Code != null && EF.Functions.ILike(x.Code, code)))
+        if (code is not null && await db.Departments.AnyAsync(x => x.Id != id && !x.IsDeleted && x.Code != null && EF.Functions.ILike(x.Code, code)))
             return Conflict("Duplicate department not allowed.");
 
         e.Name = name;
@@ -118,7 +118,7 @@ public class DepartmentsController(VetLimsDbContext db) : ControllerBase
     [HttpPatch("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
-        var e = await db.Departments.FindAsync(id);
+        var e = await db.Departments.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
         e.IsActive = isActive;
         await db.SaveChangesAsync();
@@ -128,9 +128,12 @@ public class DepartmentsController(VetLimsDbContext db) : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var e = await db.Departments.FindAsync(id);
+        var e = await db.Departments.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
-        db.Departments.Remove(e);
+        e.IsDeleted = true;
+        e.DeletedDate = DateTime.UtcNow;
+        e.DeletedBy = currentUserService.UserName ?? "system";
+        e.IsActive = false;
         await db.SaveChangesAsync();
         return NoContent();
     }

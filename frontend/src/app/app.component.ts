@@ -13,9 +13,13 @@ import { AuthService } from './core/auth.service';
   imports: [CommonModule, RouterOutlet, NavbarComponent],
   template: `
     <app-navbar *ngIf="showNavbar()"></app-navbar>
-    <div [class.container]="!isLoginRoute()" class="py-3">
+    <main
+      [class.app-content]="showNavbar()"
+      [class.container]="!isLoginRoute()"
+      [class.py-3]="!isLoginRoute()"
+    >
       <router-outlet></router-outlet>
-    </div>
+    </main>
   `,
 })
 export class AppComponent {

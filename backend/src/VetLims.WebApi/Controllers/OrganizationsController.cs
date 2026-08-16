@@ -15,11 +15,12 @@ public class OrganizationsController(VetLimsDbContext db) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrganizationDto>>> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var q = db.Organizations.AsNoTracking();
+        // Exclude soft-deleted records from normal listing
+        var q = db.Organizations.AsNoTracking().Where(x => !x.IsDeleted);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = $"%{search.Trim()}%";
-            q = q.Where(x => EF.Functions.ILike(x.Name, s) || EF.Functions.ILike(x.Code, s));
+            q = q.Where(x => (EF.Functions.ILike(x.Name, s) || EF.Functions.ILike(x.Code, s)) && !x.IsDeleted);
         }
 
         var total = await q.CountAsync();
@@ -35,7 +36,8 @@ public class OrganizationsController(VetLimsDbContext db) : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<OrganizationDto>> Get(int id)
     {
-        var item = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        // Treat soft-deleted organization as not found for normal API access
+        var item = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (item is null) return NotFound();
 
         return Ok(new OrganizationDto(item.Id, item.Code, item.Name, item.LegalName, item.Email, item.Phone, item.Address, item.IsActive));
@@ -48,7 +50,8 @@ public class OrganizationsController(VetLimsDbContext db) : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Code)) return BadRequest("Organization code is required.");
 
         var normalizedCode = dto.Code.Trim();
-        if (await db.Organizations.AnyAsync(x => EF.Functions.ILike(x.Code, normalizedCode)))
+        // Ignore soft-deleted organizations when checking for code uniqueness so codes can be reused
+        if (await db.Organizations.AnyAsync(x => !x.IsDeleted && EF.Functions.ILike(x.Code, normalizedCode)))
             return Conflict("Organization code already exists.");
 
         var item = new Organization
@@ -71,14 +74,16 @@ public class OrganizationsController(VetLimsDbContext db) : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<ActionResult<OrganizationDto>> Update(int id, [FromBody] OrganizationUpdateDto dto)
     {
-        var item = await db.Organizations.FirstOrDefaultAsync(x => x.Id == id);
+        // Only allow updates on non-deleted organizations
+        var item = await db.Organizations.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (item is null) return NotFound();
 
         if (string.IsNullOrWhiteSpace(dto.Name)) return BadRequest("Organization name is required.");
         if (string.IsNullOrWhiteSpace(dto.Code)) return BadRequest("Organization code is required.");
 
         var normalizedCode = dto.Code.Trim();
-        if (await db.Organizations.AnyAsync(x => x.Id != id && EF.Functions.ILike(x.Code, normalizedCode)))
+        // Ignore soft-deleted organizations when checking duplicates
+        if (await db.Organizations.AnyAsync(x => x.Id != id && !x.IsDeleted && EF.Functions.ILike(x.Code, normalizedCode)))
             return Conflict("Organization code already exists.");
 
         item.Code = normalizedCode;
@@ -96,13 +101,15 @@ public class OrganizationsController(VetLimsDbContext db) : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var item = await db.Organizations.FirstOrDefaultAsync(x => x.Id == id);
+        // Only allow delete on non-deleted organizations
+        var item = await db.Organizations.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (item is null) return NotFound();
 
         var clinicCount = await db.Clinics.CountAsync(x => x.OrganizationId == id);
         if (clinicCount > 0)
             return Conflict("Cannot delete organization with linked laboratories.");
 
+        // Preserve soft-delete behavior via SaveChangesAsync override
         db.Organizations.Remove(item);
         await db.SaveChangesAsync();
         return NoContent();

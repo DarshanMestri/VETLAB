@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using VetLims.Infrastructure.Entities;
 using VetLims.Infrastructure.Identity;
 using VetLims.Infrastructure;
@@ -19,8 +20,11 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
     // ==== DbSets: declare each **once** ====
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<LaboratoryGroup> LaboratoryGroups => Set<LaboratoryGroup>();
     public DbSet<Clinic> Clinics => Set<Clinic>();
     public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<BranchDepartment> BranchDepartments => Set<BranchDepartment>();
+    public DbSet<BranchTest> BranchTests => Set<BranchTest>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRefreshToken> UserRefreshTokens => Set<UserRefreshToken>();
@@ -91,46 +95,139 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
     // If you have barcode sequences or others, add them ONCE:
     // public DbSet<BarcodeSequence> BarcodeSequences => Set<BarcodeSequence>();
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        PreparePersistence();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override int SaveChanges()
+    {
+        PreparePersistence();
+        return base.SaveChanges(acceptAllChangesOnSuccess: true);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        PreparePersistence();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        PreparePersistence();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+    }
+
+    public Task<int> SaveChangesAsSystemAsync(
+        int organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        if (organizationId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(organizationId),
+                "System persistence requires a positive organization ID.");
+        }
+
+        PreparePersistence(organizationId, isExplicitSystemExecution: true);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+    }
+
+    private void PreparePersistence(
+        int? organizationIdOverride = null,
+        bool isExplicitSystemExecution = false)
     {
         var now = DateTime.UtcNow;
         var username = _currentUserService?.UserName ?? "system";
+        var currentOrganizationId = organizationIdOverride ?? _currentUserService?.OrganizationId;
+        isExplicitSystemExecution =
+            isExplicitSystemExecution || _currentUserService?.IsSystemExecution == true;
+        var entries = ChangeTracker.Entries().ToList();
 
-        var currentOrgId = _currentUserService?.OrganizationId;
-
-        foreach (var entry in ChangeTracker.Entries())
+        foreach (var entry in entries)
         {
-            if (entry.Entity is not BaseEntity baseEntity) continue;
+            if (entry.State is (EntityState.Added or EntityState.Modified or EntityState.Deleted) &&
+                entry.Entity is IOrganizationOwned organizationOwned)
+            {
+                ValidateOrganizationOwnership(
+                    entry,
+                    organizationOwned,
+                    currentOrganizationId,
+                    isExplicitSystemExecution);
+            }
+        }
+
+        foreach (var entry in entries)
+        {
+            if (entry.Entity is not BaseEntity baseEntity)
+            {
+                continue;
+            }
 
             switch (entry.State)
             {
                 case EntityState.Added:
                     baseEntity.CreatedDate = now;
                     baseEntity.CreatedBy ??= username;
-
-                    // Propagate tenant context for new entities when available
-                    baseEntity.OrganizationId ??= currentOrgId;
                     break;
+
                 case EntityState.Modified:
                     baseEntity.ModifiedDate = now;
                     baseEntity.ModifiedBy = username;
+                    break;
 
-                    // Optionally keep tenant fields in sync for modifications
-                    baseEntity.OrganizationId ??= currentOrgId;
+                case EntityState.Deleted:
+                    entry.State = EntityState.Modified;
+                    baseEntity.IsDeleted = true;
+                    baseEntity.DeletedDate = now;
+                    baseEntity.DeletedBy = username;
+                    baseEntity.ModifiedDate = now;
+                    baseEntity.ModifiedBy = username;
                     break;
             }
+        }
+    }
 
-            if (entry.State == EntityState.Deleted && entry.Entity is BaseEntity softDeleteEntity)
-            {
-                entry.State = EntityState.Modified;
-                softDeleteEntity.IsDeleted = true;
-                softDeleteEntity.DeletedDate = now;
-                softDeleteEntity.ModifiedDate = now;
-                softDeleteEntity.ModifiedBy = username;
-            }
+    private static void ValidateOrganizationOwnership(
+        EntityEntry entry,
+        IOrganizationOwned organizationOwned,
+        int? currentOrganizationId,
+        bool isExplicitSystemExecution)
+    {
+        var executionOrganizationId = currentOrganizationId;
+
+        if (!executionOrganizationId.HasValue)
+        {
+            var contextDescription = isExplicitSystemExecution
+                ? "explicit system execution"
+                : "tenant or system execution context";
+
+            throw new OrganizationOwnershipException(
+                $"Cannot persist {entry.Metadata.ClrType.Name}: an organization-owned entity requires an explicit OrganizationId in {contextDescription}.");
         }
 
-        return base.SaveChangesAsync(cancellationToken);
+        if (organizationOwned.OrganizationId.HasValue &&
+            organizationOwned.OrganizationId.Value != executionOrganizationId.Value)
+        {
+            throw new OrganizationOwnershipException(
+                $"Cannot persist {entry.Metadata.ClrType.Name}: OrganizationId {organizationOwned.OrganizationId.Value} conflicts with execution OrganizationId {executionOrganizationId.Value}.");
+        }
+
+        if (entry.State == EntityState.Added && !organizationOwned.OrganizationId.HasValue)
+        {
+            organizationOwned.OrganizationId = executionOrganizationId;
+            return;
+        }
+
+        if (entry.State is EntityState.Modified or EntityState.Deleted &&
+            !organizationOwned.OrganizationId.HasValue)
+        {
+            throw new OrganizationOwnershipException(
+                $"Cannot persist {entry.Metadata.ClrType.Name}: an existing organization-owned entity must have an OrganizationId before it can be modified or deleted.");
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -170,6 +267,23 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.HasIndex(x => x.Name);
         });
 
+        modelBuilder.Entity<LaboratoryGroup>(e =>
+        {
+            e.ToTable("laboratory_groups");
+            e.Property(x => x.OrganizationId).IsRequired();
+            e.Property(x => x.Code).IsRequired().HasMaxLength(100);
+            e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.HasIndex(x => x.OrganizationId);
+            e.HasIndex(x => x.Name);
+            e.HasIndex(x => x.IsActive);
+            e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
+            e.HasOne(x => x.Organization)
+             .WithMany()
+             .HasForeignKey(x => x.OrganizationId)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<Clinic>(e =>
         {
             e.ToTable("clinics");
@@ -190,9 +304,14 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.EmailSettingsJson).HasColumnType("jsonb");
             e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
             e.HasIndex(x => x.Name);
+            e.HasIndex(x => x.LaboratoryGroupId);
             e.HasOne(x => x.Organization)
              .WithMany()
              .HasForeignKey(x => x.OrganizationId)
+             .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.LaboratoryGroup)
+             .WithMany(x => x.Clinics)
+             .HasForeignKey(x => x.LaboratoryGroupId)
              .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -216,6 +335,42 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
              .WithMany()
              .HasForeignKey(x => x.ClinicId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BranchDepartment>(e =>
+        {
+            e.ToTable("branch_departments");
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.HasIndex(x => new { x.BranchId, x.DepartmentId })
+             .IsUnique()
+             .HasFilter("\"IsDeleted\" = false");
+            e.HasOne(x => x.Branch)
+             .WithMany()
+             .HasForeignKey(x => x.BranchId)
+             .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Department)
+             .WithMany()
+             .HasForeignKey(x => x.DepartmentId)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BranchTest>(e =>
+        {
+            e.ToTable("branch_tests");
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.HasIndex(x => new { x.BranchId, x.TestId })
+             .IsUnique()
+             .HasFilter("\"IsDeleted\" = false");
+            e.HasIndex(x => x.BranchId);
+            e.HasIndex(x => x.TestId);
+            e.HasOne(x => x.Branch)
+             .WithMany()
+             .HasForeignKey(x => x.BranchId)
+             .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Test)
+             .WithMany()
+             .HasForeignKey(x => x.TestId)
+             .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AppUser>(e =>
@@ -559,22 +714,31 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         modelBuilder.Entity<Test>(e =>
         {
             e.ToTable("tests");
+            e.Property(x => x.OrganizationId).IsRequired();
             e.Property(x => x.Name).IsRequired();
             e.Property(x => x.DisplayName).HasMaxLength(200);
             e.Property(x => x.Code).HasMaxLength(50);
             e.Property(x => x.ValueType).HasConversion<int>().IsRequired();
             e.HasIndex(x => x.Name);
+            e.HasIndex(x => x.OrganizationId);
+            
+            // Organization-scoped unique Code (nullable Code allowed, NULL != NULL in SQL)
+            e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
+
+            e.HasOne(x => x.Organization)
+             .WithMany()
+             .HasForeignKey(x => x.OrganizationId)
+             .OnDelete(DeleteBehavior.Restrict);
 
             e.HasOne(x => x.Department)
-            .WithMany()
-            .HasForeignKey(x => x.DepartmentId)
-            .OnDelete(DeleteBehavior.Restrict);
+             .WithMany()
+             .HasForeignKey(x => x.DepartmentId)
+             .OnDelete(DeleteBehavior.Restrict);
 
             e.HasOne(x => x.Unit)
-            .WithMany()
-            .HasForeignKey(x => x.UnitId)
-            .OnDelete(DeleteBehavior.SetNull);
-            e.HasIndex(x => x.Code).IsUnique();
+             .WithMany()
+             .HasForeignKey(x => x.UnitId)
+             .OnDelete(DeleteBehavior.SetNull);
         });
 
         // === TestParameter ===
@@ -915,6 +1079,18 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.HasIndex(x => x.ProviderMessageId);
             e.HasIndex(x => new { x.MessageType, x.CreatedDate });
         });
+
+        // OrganizationId remains available on BaseEntity for CLR compatibility, but it is
+        // persisted only for entity types that explicitly opt into organization ownership.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(entityType =>
+                         entityType.ClrType is not null &&
+                         typeof(BaseEntity).IsAssignableFrom(entityType.ClrType) &&
+                         !typeof(IOrganizationOwned).IsAssignableFrom(entityType.ClrType)))
+        {
+            modelBuilder.Entity(entityType.ClrType)
+                .Ignore(nameof(BaseEntity.OrganizationId));
+        }
 
         // === If you have BarcodeSequence entity ===
         // modelBuilder.Entity<BarcodeSequence>(e => { e.ToTable("barcode_sequences"); ... });

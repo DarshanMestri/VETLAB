@@ -105,10 +105,23 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<VetLimsDbContext>();
-    await db.Database.MigrateAsync();
+
+    try
+    {
+        await db.Database.MigrateAsync();
+    }
+    catch (Npgsql.PostgresException ex) when (ex.SqlState is "42P07" or "42710")
+    {
+        throw new InvalidOperationException(
+            "Database migration failed because the target database contains schema objects " +
+            "that are not recorded by the migrations checked into this application. " +
+            "Do not bypass migrations: use a clean development database, or create a " +
+            "reviewed data-preserving migration plan for the legacy database.",
+            ex);
+    }
 
     var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
-    await seeder.SeedAsync();   // prints the “Default Admin user created” message
+    await seeder.SeedAsync();
 }
 
 // 5) RUN

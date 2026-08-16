@@ -17,10 +17,11 @@ public class RegistrationsController : ControllerBase
     private readonly VetLimsDbContext _db;
     private readonly PricingService _pricing;
     private readonly BarcodeService _barcodes;
+    private readonly ICurrentUserService _currentUserService;
 
-    public RegistrationsController(VetLimsDbContext db, PricingService pricing, BarcodeService barcodes)
+    public RegistrationsController(VetLimsDbContext db, PricingService pricing, BarcodeService barcodes, ICurrentUserService currentUserService)
     {
-        _db = db; _pricing = pricing; _barcodes = barcodes;
+        _db = db; _pricing = pricing; _barcodes = barcodes; _currentUserService = currentUserService;
     }
 
     // List + filters (owner search, client, species)
@@ -72,6 +73,19 @@ public class RegistrationsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<RegistrationDetailDto>> Create([FromBody] RegistrationCreateDto dto)
     {
+        var organizationId = _currentUserService.OrganizationId;
+        if (!organizationId.HasValue)
+            return Forbid();
+
+        var branchId = dto.BranchId ?? _currentUserService.BranchId;
+        if (!branchId.HasValue)
+            return BadRequest("Branch selection is required.");
+
+        var branch = await _db.Branches.Include(x => x.Clinic)
+            .FirstOrDefaultAsync(x => x.Id == branchId.Value && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
+        if (branch is null)
+            return BadRequest("Selected branch is not available for your organization.");
+
         if (dto.Animals.Count == 0)
             return BadRequest("At least one animal is required.");
         if (dto.Items.Count == 0)
@@ -98,13 +112,15 @@ public class RegistrationsController : ControllerBase
 
         var reg = new Registration
         {
-            OwnerName = ownerName,
-            ClientId = dto.ClientId,
-            OwnerId = dto.OwnerId,
-            DoctorId = dto.DoctorId,
-            ReferenceNumber = dto.ReferenceNumber?.Trim(),
-            ClinicalNotes = dto.ClinicalNotes?.Trim(),
-            Barcode = await _barcodes.NextAsync()
+           ClinicId = branch.ClinicId,
+           BranchId = branch.Id,
+           OwnerName = ownerName,
+           ClientId = dto.ClientId,
+           OwnerId = dto.OwnerId,
+           DoctorId = dto.DoctorId,
+           ReferenceNumber = dto.ReferenceNumber?.Trim(),
+           ClinicalNotes = dto.ClinicalNotes?.Trim(),
+           Barcode = await _barcodes.NextAsync()
         };
 
         // animals
@@ -145,9 +161,18 @@ public class RegistrationsController : ControllerBase
                 if (!sampleTypeExists) return BadRequest($"Selected sample type was not found: {it.SampleTypeId.Value}");
             }
 
+            if (it.ItemType == RegItemType.Test)
+            {
+                var (isAllowed, error) = await TestBranchAvailabilityService.ValidateTestUseAsync(_db, it.ItemId, branch.Id, organizationId.Value);
+                if (!isAllowed)
+                    return BadRequest(error ?? "The selected Test is not enabled for this Branch.");
+            }
+
             var price = await _pricing.ResolvePriceAsync(dto.ClientId, it.ItemType, it.ItemId);
             var item = new RegistrationItem
             {
+                ClinicId = branch.ClinicId,
+                BranchId = branch.Id,
                 ItemType = it.ItemType,
                 ItemId = it.ItemId,
                 SpeciesId = it.SpeciesId,
@@ -226,8 +251,12 @@ public class RegistrationsController : ControllerBase
             .Select(x => new { x.Id, x.Code, x.Name })
             .ToListAsync();
 
+        var organizationId = _currentUserService.OrganizationId;
+        if (!organizationId.HasValue)
+            return Forbid();
+
         var tests = await _db.Tests.AsNoTracking()
-            .Where(x => x.IsActive)
+            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive)
             .OrderBy(x => x.Name)
             .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Test, x.DepartmentId, SampleTypeId = (int?)null })
             .ToListAsync();

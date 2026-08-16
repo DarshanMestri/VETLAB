@@ -17,10 +17,11 @@ public class ResultsController : ControllerBase
     private readonly VetLimsDbContext _db;
     private readonly ReferenceRangeService _rr;
     private readonly ResultReportService _reports;
+    private readonly ICurrentUserService _currentUserService;
 
-    public ResultsController(VetLimsDbContext db, ReferenceRangeService rr, ResultReportService reports)
+    public ResultsController(VetLimsDbContext db, ReferenceRangeService rr, ResultReportService reports, ICurrentUserService currentUserService)
     {
-        _db = db; _rr = rr; _reports = reports;
+        _db = db; _rr = rr; _reports = reports; _currentUserService = currentUserService;
     }
 
     /// Worklist: filter by test, department, barcode, status
@@ -192,6 +193,17 @@ public class ResultsController : ControllerBase
         var item = await _db.RegistrationItems.Include(ri => ri.Registration).FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
 
+        var organizationId = _currentUserService.OrganizationId;
+        if (!organizationId.HasValue)
+            return Forbid();
+
+        if (item.ItemType == RegItemType.Test && item.BranchId.HasValue)
+        {
+            var (isAllowed, error) = await TestBranchAvailabilityService.ValidateTestUseAsync(_db, item.ItemId, item.BranchId.Value, organizationId.Value);
+            if (!isAllowed)
+                return BadRequest(error ?? "The selected Test is not enabled for this Branch.");
+        }
+
         // Move item to InProgress
         if (item.Status == RegItemStatus.Pending)
             item.Status = RegItemStatus.InProgress;
@@ -260,6 +272,17 @@ public class ResultsController : ControllerBase
     {
         var item = await _db.RegistrationItems.FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
+
+        var organizationId = _currentUserService.OrganizationId;
+        if (!organizationId.HasValue)
+            return Forbid();
+
+        if (item.ItemType == RegItemType.Test && item.BranchId.HasValue)
+        {
+            var (isAllowed, error) = await TestBranchAvailabilityService.ValidateTestUseAsync(_db, item.ItemId, item.BranchId.Value, organizationId.Value);
+            if (!isAllowed)
+                return BadRequest(error ?? "The selected Test is not enabled for this Branch.");
+        }
 
         item.Status = RegItemStatus.Completed;
         item.SampleStatus = SampleWorkflowStatus.Processed;

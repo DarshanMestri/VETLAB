@@ -99,10 +99,16 @@ namespace VetLims.WebApi.Controllers
             if (!req.ClinicId.HasValue)
                 return BadRequest("Lab location is required.");
 
-            var clinic = await _db.Clinics.AsNoTracking()
+            var clinic = await _db.Clinics
+                .AsNoTracking()
+                .Include(c => c.Organization)
                 .FirstOrDefaultAsync(c => c.Id == req.ClinicId.Value && c.IsActive);
             if (clinic == null)
                 return BadRequest("Selected lab location is invalid or inactive.");
+            if (!clinic.OrganizationId.HasValue || clinic.Organization == null)
+                return Problem(
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    detail: "Selected lab location is not assigned to an organization.");
 
             var activeBranches = await _db.Branches.AsNoTracking()
                 .Where(b => b.IsActive && b.ClinicId == clinic.Id)
@@ -141,7 +147,7 @@ namespace VetLims.WebApi.Controllers
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Name, user.UserName ?? ""),
-                new("organization_id", clinic.OrganizationId.ToString()),
+                new("organization_id", clinic.OrganizationId.Value.ToString()),
                 new("organization_name", clinic.Organization.Name ?? string.Empty),
                 new("clinic_id", clinic.Id.ToString()),
                 new("clinic_name", clinic.Name)
@@ -216,7 +222,7 @@ namespace VetLims.WebApi.Controllers
                 IsActive = true
             };
             _db.Clinics.Add(clinic);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsSystemAsync(organization.Id);
 
             var branch = new Infrastructure.Entities.Branch
             {

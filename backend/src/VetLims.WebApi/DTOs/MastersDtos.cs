@@ -91,6 +91,11 @@ public record OrganizationDto(int Id, string Code, string Name, string? LegalNam
 public record OrganizationCreateDto(string Code, string Name, string? LegalName, string? Email, string? Phone, string? Address, bool IsActive = true);
 public record OrganizationUpdateDto(string Code, string Name, string? LegalName, string? Email, string? Phone, string? Address, bool IsActive = true);
 
+public record LaboratoryGroupDto(int Id, int OrganizationId, string Code, string Name, string? Description, bool IsActive, DateTime CreatedDate, DateTime? ModifiedDate, bool IsDeleted, int ClinicCount);
+public record LaboratoryGroupCreateDto(string Code, string Name, string? Description, bool IsActive = true);
+public record LaboratoryGroupUpdateDto(string Code, string Name, string? Description, bool IsActive = true);
+public record LaboratoryGroupClinicDto(int Id, int OrganizationId, string Code, string Name, string? ShortName, bool IsActive, int? LaboratoryGroupId);
+
 public record ClinicDto(int Id, int OrganizationId, string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive);
 public record ClinicCreateDto(string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive = true, int? OrganizationId = null);
 public record ClinicUpdateDto(string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive = true, int? OrganizationId = null);
@@ -98,6 +103,7 @@ public record ClinicUpdateDto(string Code, string Name, string? Logo, string? Ad
 public record BranchDto(int Id, int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive);
 public record BranchCreateDto(int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
 public record BranchUpdateDto(int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
+public record BranchDepartmentDto(int Id, int BranchId, int DepartmentId, string DepartmentName, string? DepartmentCode, bool IsActive);
 
 public record RoleDto(int Id, string Name);
 public record RoleCreateDto(string Name);
@@ -174,6 +180,7 @@ public record RegistrationCreateDto(
     string? ClinicalNotes,
     List<RegistrationAnimalDto> Animals,
     List<RegistrationItemCreateDto> Items,
+    int? BranchId = null,
     decimal? InitialPaymentAmount = null,
     PaymentMethod? InitialPaymentMethod = null,
     string? InitialPaymentRef = null

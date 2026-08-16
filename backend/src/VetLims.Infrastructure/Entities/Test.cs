@@ -1,10 +1,11 @@
 namespace VetLims.Infrastructure.Entities;
 
 // A single measurable test, may have multiple parameters (e.g., "CBC" with Hb, WBC etc.)
-public class Test : BaseEntity
+public class Test : BaseEntity, IOrganizationOwned
 {
     public string Name { get; set; } = default!;
     public string? Code { get; set; }
+    public Organization Organization { get; set; } = default!;
     public int DepartmentId { get; set; }
     public Department Department { get; set; } = default!;
     public string? DisplayName { get; set; }
