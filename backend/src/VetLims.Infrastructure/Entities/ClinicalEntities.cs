@@ -47,6 +47,9 @@ public class ClinicalEncounter : BaseEntity
     public string? Diagnosis { get; set; }
     public string? TreatmentPlan { get; set; }
     public DateTime? FollowUpAt { get; set; }
+    public DiscountType? DiscountType { get; set; }
+    public decimal DiscountValue { get; set; }
+    public decimal DiscountAmount { get; set; }
     public ICollection<PrescriptionItem> Prescriptions { get; set; } = new List<PrescriptionItem>();
     public ICollection<VaccinationRecord> Vaccinations { get; set; } = new List<VaccinationRecord>();
 }

@@ -65,7 +65,12 @@ public class RegistrationsController : ControllerBase
                 x.TotalVat,
                 x.PaidAmount,
                 x.Balance,
-                x.OwnerMobile))
+                x.OwnerMobile,
+                x.DiscountAmount,
+                x.DiscountValue,
+                (int?)x.DiscountType,
+                x.AgeValue,
+                (int?)x.AgeUnit))
             .ToListAsync();
 
         return Ok(new PagedResult<RegistrationDto> { Page = page, PageSize = size, Total = total, Items = items });
@@ -123,10 +128,25 @@ public class RegistrationsController : ControllerBase
            ClientId = dto.ClientId,
            OwnerId = dto.OwnerId,
            DoctorId = dto.DoctorId,
-           ReferenceNumber = dto.ReferenceNumber?.Trim(),
-           ClinicalNotes = dto.ClinicalNotes?.Trim(),
-           Barcode = await _barcodes.NextAsync()
+            ReferenceNumber = dto.ReferenceNumber?.Trim(),
+            ClinicalNotes = dto.ClinicalNotes?.Trim(),
+            Barcode = await _barcodes.NextAsync(),
+            AgeValue = dto.AgeValue,
+            AgeUnit = dto.AgeUnit
         };
+
+        // Normalize registration-level age to days for reference range lookup
+        int? regAgeInDays = null;
+        if (dto.AgeValue.HasValue && dto.AgeUnit.HasValue)
+        {
+            regAgeInDays = dto.AgeUnit.Value switch
+            {
+                AgeUnit.Days   => dto.AgeValue.Value,
+                AgeUnit.Months => dto.AgeValue.Value * 30,
+                AgeUnit.Years  => dto.AgeValue.Value * 365,
+                _ => dto.AgeValue.Value
+            };
+        }
 
         // animals
         foreach (var a in dto.Animals)
@@ -150,9 +170,7 @@ public class RegistrationsController : ControllerBase
                 AnimalId = a.AnimalId,
                 SpeciesId = speciesId,
                 AnimalName = animalName,
-                AgeInDays = a.AgeInDays ?? (animal?.DateOfBirth.HasValue == true
-                    ? Math.Max((DateTime.UtcNow.Date - animal.DateOfBirth.Value.ToDateTime(TimeOnly.MinValue).Date).Days, 0)
-                    : null)
+                AgeInDays = regAgeInDays
             });
         }
 
@@ -200,7 +218,32 @@ public class RegistrationsController : ControllerBase
             totalNet += price * quantity;
             totalVat += unitVat * quantity;
         }
-        reg.TotalAmount = decimal.Round(totalNet + totalVat, 2, MidpointRounding.AwayFromZero);
+
+        // Discount calculation (server-authoritative)
+        decimal subtotalPlusVat = totalNet + totalVat;
+        decimal discountAmount = 0m;
+        if (dto.DiscountType.HasValue && dto.DiscountValue > 0)
+        {
+            if (dto.DiscountType == DiscountType.Percentage)
+            {
+                if (dto.DiscountValue > 100)
+                    return BadRequest("Discount percentage cannot exceed 100%.");
+                discountAmount = decimal.Round(subtotalPlusVat * dto.DiscountValue / 100m, 2, MidpointRounding.AwayFromZero);
+            }
+            else if (dto.DiscountType == DiscountType.Amount)
+            {
+                if (dto.DiscountValue > subtotalPlusVat)
+                    return BadRequest("Discount amount cannot exceed the subtotal.");
+                discountAmount = decimal.Round(dto.DiscountValue, 2, MidpointRounding.AwayFromZero);
+            }
+            if (discountAmount < 0)
+                return BadRequest("Discount cannot be negative.");
+        }
+
+        reg.DiscountType = dto.DiscountType;
+        reg.DiscountValue = decimal.Round(dto.DiscountValue, 2, MidpointRounding.AwayFromZero);
+        reg.DiscountAmount = discountAmount;
+        reg.TotalAmount = decimal.Round(subtotalPlusVat - discountAmount, 2, MidpointRounding.AwayFromZero);
         reg.TotalVat = decimal.Round(totalVat, 2, MidpointRounding.AwayFromZero);
 
         // optional initial payment
@@ -290,7 +333,7 @@ public class RegistrationsController : ControllerBase
             .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive
                 && (branchId.HasValue ? enabledTestIds.Contains(x.Id) : true))
             .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Test, x.DepartmentId, SampleTypeId = (int?)null })
+            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Test, x.DepartmentId, x.SampleTypeId })
             .ToListAsync();
 
         var profiles = await _db.Profiles.AsNoTracking()
@@ -458,7 +501,12 @@ public class RegistrationsController : ControllerBase
                     i.SampleNotes,
                     i.Quantity)).ToList(),
                 r.Payments.Select(p => new PaymentView(p.Id, p.Method, p.Amount, p.PaidAt, p.Reference, p.Currency)).ToList(),
-                r.OwnerMobile))
+                r.OwnerMobile,
+                r.DiscountAmount,
+                r.DiscountValue,
+                (int?)r.DiscountType,
+                r.AgeValue,
+                (int?)r.AgeUnit))
             .FirstOrDefaultAsync();
     }
 }

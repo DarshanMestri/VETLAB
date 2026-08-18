@@ -125,9 +125,9 @@ public record ClientCreateDto(string Name, string? Code, string? Phone, string? 
 public record ClientUpdateDto(string Name, string? Code, string? Phone, string? Email, string? Address, bool IsActive = true);
 
 // Test + Parameter + Reference Ranges
-public record TestDto(int Id, string Name, string? DisplayName, string? Code, int DepartmentId, int? UnitId, TestValueType ValueType, bool IsActive);
-public record TestCreateDto(string Name, string? DisplayName, string? Code, int DepartmentId, int? UnitId, TestValueType ValueType, bool IsActive);
-public record TestUpdateDto(string Name, string? DisplayName, string? Code, int DepartmentId, int? UnitId, TestValueType ValueType, bool IsActive);
+public record TestDto(int Id, string Name, string? DisplayName, string? Code, int DepartmentId, int? UnitId, int? SampleTypeId, TestValueType ValueType, bool IsActive);
+public record TestCreateDto(string Name, string? DisplayName, string? Code, int DepartmentId, int? UnitId, int? SampleTypeId, TestValueType ValueType, bool IsActive);
+public record TestUpdateDto(string Name, string? DisplayName, string? Code, int DepartmentId, int? UnitId, int? SampleTypeId, TestValueType ValueType, bool IsActive);
 
 public record TestParameterDto(int Id, int TestId, string Name, int? UnitId, int SortOrder, bool IsActive);
 public record TestParameterCreateDto(int TestId, string Name, int? UnitId, int SortOrder, bool IsActive);
@@ -184,7 +184,11 @@ public record RegistrationCreateDto(
     decimal? InitialPaymentAmount = null,
     PaymentMethod? InitialPaymentMethod = null,
     string? InitialPaymentRef = null,
-    string? OwnerMobile = null
+    string? OwnerMobile = null,
+    DiscountType? DiscountType = null,
+    decimal DiscountValue = 0,
+    int? AgeValue = null,
+    AgeUnit? AgeUnit = null
 );
 
 public record RegistrationDto(
@@ -201,7 +205,12 @@ public record RegistrationDto(
     decimal TotalVat,
     decimal PaidAmount,
     decimal Balance,
-    string? OwnerMobile = null
+    string? OwnerMobile = null,
+    decimal DiscountAmount = 0,
+    decimal DiscountValue = 0,
+    int? DiscountType = null,
+    int? AgeValue = null,
+    int? AgeUnit = null
 );
 
 public record RegistrationAnimalDto(int SpeciesId, string? AnimalName, int? AnimalId = null, int? AgeInDays = null);
@@ -225,7 +234,12 @@ public record RegistrationDetailDto(
     IEnumerable<RegistrationAnimalView> Animals,
     IEnumerable<RegistrationItemView> Items,
     IEnumerable<PaymentView> Payments,
-    string? OwnerMobile = null
+    string? OwnerMobile = null,
+    decimal DiscountAmount = 0,
+    decimal DiscountValue = 0,
+    int? DiscountType = null,
+    int? AgeValue = null,
+    int? AgeUnit = null
 );
 
 public record RegistrationAnimalView(int Id, int SpeciesId, string? AnimalName, int? AnimalId, int? AgeInDays = null);

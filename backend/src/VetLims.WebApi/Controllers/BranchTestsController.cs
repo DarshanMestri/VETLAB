@@ -109,7 +109,7 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
         var items = await db.Tests.AsNoTracking()
             .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive && !alreadyAssigned.Contains(x.Id))
             .OrderBy(x => x.Name)
-            .Select(x => new TestDto(x.Id, x.Name, x.DisplayName, x.Code, x.DepartmentId, x.UnitId, x.ValueType, x.IsActive))
+            .Select(x => new TestDto(x.Id, x.Name, x.DisplayName, x.Code, x.DepartmentId, x.UnitId, x.SampleTypeId, x.ValueType, x.IsActive))
             .ToListAsync();
 
         return Ok(items);

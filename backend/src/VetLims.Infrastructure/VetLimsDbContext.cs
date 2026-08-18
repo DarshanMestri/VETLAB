@@ -778,6 +778,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.ToTable("owners");
             e.Property(x => x.Code).IsRequired().HasMaxLength(50);
             e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            e.Property(x => x.NameAr).HasMaxLength(200);
             e.Property(x => x.Mobile).HasMaxLength(30);
             e.Property(x => x.WhatsApp).HasMaxLength(30);
             e.Property(x => x.Email).HasMaxLength(200);
@@ -828,7 +829,11 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.HasOne(x => x.Doctor).WithMany().HasForeignKey(x => x.DoctorId).OnDelete(DeleteBehavior.SetNull);
         });
         modelBuilder.Entity<QueueEntry>(e => { e.ToTable("queue_entries"); e.HasIndex(x => new { x.QueuedAt, x.Status }); e.HasIndex(x => x.AppointmentId).IsUnique(); e.HasOne(x => x.Appointment).WithOne(x => x.QueueEntry).HasForeignKey<QueueEntry>(x => x.AppointmentId).OnDelete(DeleteBehavior.Cascade); });
-        modelBuilder.Entity<ClinicalEncounter>(e => { e.ToTable("clinical_encounters"); e.HasIndex(x => x.AppointmentId).IsUnique(); e.HasOne(x => x.Appointment).WithOne(x => x.Encounter).HasForeignKey<ClinicalEncounter>(x => x.AppointmentId).OnDelete(DeleteBehavior.Cascade); e.HasOne(x => x.Doctor).WithMany().HasForeignKey(x => x.DoctorId).OnDelete(DeleteBehavior.SetNull); });
+        modelBuilder.Entity<ClinicalEncounter>(e => { e.ToTable("clinical_encounters"); e.HasIndex(x => x.AppointmentId).IsUnique(); e.HasOne(x => x.Appointment).WithOne(x => x.Encounter).HasForeignKey<ClinicalEncounter>(x => x.AppointmentId).OnDelete(DeleteBehavior.Cascade);             e.HasOne(x => x.Doctor).WithMany().HasForeignKey(x => x.DoctorId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.DiscountType).HasConversion<int>();
+            e.Property(x => x.DiscountValue).HasColumnType("numeric(18,2)");
+            e.Property(x => x.DiscountAmount).HasColumnType("numeric(18,2)");
+        });
         modelBuilder.Entity<PrescriptionItem>(e => { e.ToTable("prescription_items"); e.Property(x => x.MedicineName).IsRequired().HasMaxLength(200); e.HasOne(x => x.ClinicalEncounter).WithMany(x => x.Prescriptions).HasForeignKey(x => x.ClinicalEncounterId).OnDelete(DeleteBehavior.Cascade); e.HasOne(x => x.Medicine).WithMany().HasForeignKey(x => x.MedicineId).OnDelete(DeleteBehavior.SetNull); });
         modelBuilder.Entity<VaccinationRecord>(e => { e.ToTable("vaccination_records"); e.Property(x => x.VaccineName).IsRequired().HasMaxLength(200); e.HasOne(x => x.ClinicalEncounter).WithMany(x => x.Vaccinations).HasForeignKey(x => x.ClinicalEncounterId).OnDelete(DeleteBehavior.Cascade); });
 
@@ -880,6 +885,11 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.HasOne(x => x.Unit)
              .WithMany()
              .HasForeignKey(x => x.UnitId)
+             .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(x => x.SampleType)
+             .WithMany()
+             .HasForeignKey(x => x.SampleTypeId)
              .OnDelete(DeleteBehavior.SetNull);
         });
 

@@ -12,11 +12,13 @@ type TestRow = {
   displayName?: string | null;
   departmentId: number;
   unitId?: number | null;
+  sampleTypeId?: number | null;
   valueType: number;
   isActive: boolean;
 };
 type Dept = { id: number; name: string };
 type Unit = { id: number; name: string; symbol: string };
+type SampleType = { id: number; name: string };
 type ParamRow = {
   id: number;
   testId: number;
@@ -67,6 +69,7 @@ type Species = { id: number; name: string };
             <th>Display Name</th>
             <th>Dept</th>
             <th>Unit</th>
+            <th>Sample Type</th>
             <th>Type</th>
             <th>Status</th>
             <th class="text-end">Actions</th>
@@ -80,6 +83,7 @@ type Species = { id: number; name: string };
             <td>{{ r.displayName || '-' }}</td>
             <td>{{ deptName(r.departmentId) }}</td>
             <td>{{ unitById(r.unitId)?.symbol || '-' }}</td>
+            <td>{{ sampleTypeName(r.sampleTypeId) }}</td>
             <td>{{ valueTypeLabel(r.valueType) }}</td>
             <td>
               <span
@@ -165,6 +169,13 @@ type Species = { id: number; name: string };
         </select>
       </div>
       <div class="mb-2">
+        <label class="form-label">Sample Type</label>
+        <select class="form-select" [(ngModel)]="dlgModel.sampleTypeId" name="sampleTypeId">
+          <option [ngValue]="null">(none)</option>
+          <option *ngFor="let st of sampleTypes" [ngValue]="st.id">{{ st.name }}</option>
+        </select>
+      </div>
+      <div class="mb-2">
         <label class="form-label">Value Type</label>
         <select class="form-select" [(ngModel)]="dlgModel.valueType" name="valueType" required>
           <option [ngValue]="1">Text</option>
@@ -218,7 +229,7 @@ type Species = { id: number; name: string };
       <div class="border rounded p-2 mt-3">
         <div class="d-flex justify-content-between align-items-center">
           <strong>Existing Parameters</strong>
-          <button class="btn btn-sm btn-outline-secondary" (click)="reloadParams()">Reload</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="reloadParams()">Reload</button>
         </div>
         <table class="table table-sm mt-2" *ngIf="params.length">
           <thead>
@@ -302,7 +313,7 @@ type Species = { id: number; name: string };
       <div class="border rounded p-2 mt-3">
         <div class="d-flex justify-content-between align-items-center">
           <strong>Existing Ranges</strong>
-          <button class="btn btn-sm btn-outline-secondary" (click)="reloadRanges()">Reload</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="reloadRanges()">Reload</button>
         </div>
         <table class="table table-sm mt-2" *ngIf="ranges.length">
           <thead>
@@ -340,6 +351,7 @@ export class TestsListComponent {
   rows: TestRow[] = [];
   depts: Dept[] = [];
   units: Unit[] = [];
+  sampleTypes: SampleType[] = [];
   search = '';
 
   // Test dialog
@@ -351,6 +363,7 @@ export class TestsListComponent {
     displayName: '',
     departmentId: 0,
     unitId: null,
+    sampleTypeId: null,
     valueType: 1,
     isActive: true,
   };
@@ -379,6 +392,7 @@ export class TestsListComponent {
     this.load();
     this.loadDepts();
     this.loadUnits();
+    this.loadSampleTypes();
     this.loadSpecies();
   }
 
@@ -404,8 +418,16 @@ export class TestsListComponent {
       .get<any>('/api/species?page=1&pageSize=999')
       .subscribe((res) => (this.speciesList = res?.items ?? []));
   }
+  loadSampleTypes() {
+    this.http
+      .get<any>('/api/mastercatalog/sampletypes?page=1&pageSize=999')
+      .subscribe((res) => (this.sampleTypes = res?.items ?? []));
+  }
   deptName(id: number) {
     return this.depts.find((d) => d.id === id)?.name || id;
+  }
+  sampleTypeName(id?: number | null) {
+    return id ? this.sampleTypes.find((s) => s.id === id)?.name || '-' : '-';
   }
 
   valueTypeLabel(value: number) {
@@ -421,6 +443,7 @@ export class TestsListComponent {
       displayName: '',
       departmentId: 0,
       unitId: null,
+      sampleTypeId: null,
       valueType: 1,
       isActive: true,
     };
@@ -437,6 +460,7 @@ export class TestsListComponent {
       displayName: r.displayName,
       departmentId: r.departmentId,
       unitId: r.unitId,
+      sampleTypeId: r.sampleTypeId ?? null,
       valueType: r.valueType,
       isActive: r.isActive,
     };
@@ -455,6 +479,7 @@ export class TestsListComponent {
       code: model.code?.trim() ?? null,
       departmentId,
       unitId,
+      sampleTypeId: model.sampleTypeId == null ? null : Number(model.sampleTypeId),
       valueType,
       isActive: model.isActive ?? true,
     };
@@ -580,7 +605,7 @@ export class TestsListComponent {
         .put(`/api/tests/${this.currentTestId}/parameters/${m.id}`, payload)
         .subscribe({
           next: () => {
-            this.paramModel = { name: '', unitId: null, sortOrder: 1 };
+            this.paramModel = { name: '', unitId: null, sortOrder: (this.params.at(-1)?.sortOrder ?? 0) + 1 };
             this.reloadParams();
           },
           error: (e) => alert(e?.error?.title ?? e?.error ?? 'Update failed'),
@@ -588,7 +613,7 @@ export class TestsListComponent {
     } else {
       this.http.post(`/api/tests/${this.currentTestId}/parameters`, payload).subscribe({
         next: () => {
-          this.paramModel = { name: '', unitId: null, sortOrder: 1 };
+          this.paramModel = { name: '', unitId: null, sortOrder: (this.params.at(-1)?.sortOrder ?? 0) + 1 };
           this.reloadParams();
         },
         error: (e) => alert(e?.error?.title ?? e?.error ?? 'Create failed'),

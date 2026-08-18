@@ -54,11 +54,11 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = $"%{search.Trim()}%";
-            query = query.Where(x => EF.Functions.ILike(x.Code, term) || EF.Functions.ILike(x.Name, term) || (x.Mobile != null && EF.Functions.ILike(x.Mobile, term)));
+            query = query.Where(x => EF.Functions.ILike(x.Code, term) || EF.Functions.ILike(x.Name, term) || (x.NameAr != null && EF.Functions.ILike(x.NameAr, term)) || (x.Mobile != null && EF.Functions.ILike(x.Mobile, term)));
         }
         var total = await query.CountAsync(ct);
         var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Code).Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(x => new OwnerDto(x.Id, x.Code, x.Name, x.Mobile, x.WhatsApp, x.Email, x.Address, x.City, x.IsActive, x.Animals.Count(a => !a.IsDeleted))).ToListAsync(ct);
+            .Select(x => new OwnerDto(x.Id, x.Code, x.Name, x.NameAr, x.Mobile, x.WhatsApp, x.Email, x.Address, x.City, x.IsActive, x.Animals.Count(a => !a.IsDeleted))).ToListAsync(ct);
         return Ok(new { total, items, page, pageSize });
     }
 
@@ -197,6 +197,7 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
                 x.Id,
                 x.Code,
                 x.Name,
+                x.NameAr,
                 x.Mobile,
                 x.WhatsApp,
                 x.Email,
@@ -228,6 +229,7 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
                 owner.Id,
                 owner.Code,
                 owner.Name,
+                owner.NameAr,
                 owner.Mobile,
                 owner.WhatsApp,
                 owner.Email,
@@ -298,7 +300,7 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
                 animal.MedicalHistory);
     }
     private static MedicalHistoryDto Map(MedicalHistoryEntry x) => new(x.Id, x.OccurredAt, x.EntryType, x.Diagnosis, x.Treatment, x.Medication, x.Notes);
-    private static void Apply(Owner x, OwnerUpsertDto dto) { x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.Mobile = Clean(dto.Mobile); x.WhatsApp = Clean(dto.WhatsApp); x.Email = Clean(dto.Email); x.Address = Clean(dto.Address); x.City = Clean(dto.City); x.IsActive = dto.IsActive; }
+    private static void Apply(Owner x, OwnerUpsertDto dto) { x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.NameAr = Clean(dto.NameAr); x.Mobile = Clean(dto.Mobile); x.WhatsApp = Clean(dto.WhatsApp); x.Email = Clean(dto.Email); x.Address = Clean(dto.Address); x.City = Clean(dto.City); x.IsActive = dto.IsActive; }
     private static void Apply(Animal x, AnimalUpsertDto dto) { x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.SpeciesId = dto.SpeciesId; x.BreedId = dto.BreedId; x.GenderId = dto.GenderId; x.ColorId = dto.ColorId; x.DateOfBirth = dto.DateOfBirth; x.WeightKg = dto.WeightKg; x.MicrochipNumber = Clean(dto.MicrochipNumber); x.PhotoUrl = Clean(dto.PhotoUrl); x.VaccinationStatus = Clean(dto.VaccinationStatus); x.IsActive = dto.IsActive; }
     private static void Apply(MedicalHistoryEntry x, MedicalHistoryUpsertDto dto) { x.OccurredAt = dto.OccurredAt; x.EntryType = dto.EntryType.Trim(); x.Diagnosis = Clean(dto.Diagnosis); x.Treatment = Clean(dto.Treatment); x.Medication = Clean(dto.Medication); x.Notes = Clean(dto.Notes); }
     private static int? CalculateAgeInDays(DateOnly? dateOfBirth)

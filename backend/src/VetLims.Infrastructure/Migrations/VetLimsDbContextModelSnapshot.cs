@@ -1377,6 +1377,15 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<string>("Diagnosis")
                         .HasColumnType("text");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("DiscountType")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<int?>("DoctorId")
                         .HasColumnType("integer");
 
@@ -2679,6 +2688,10 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("NameAr")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3161,6 +3174,12 @@ namespace VetLims.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AgeUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("AgeValue")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Barcode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -3193,6 +3212,15 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<DateTime?>("DeletedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("DiscountType")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasColumnType("numeric");
 
                     b.Property<int?>("DoctorId")
                         .HasColumnType("integer");
@@ -3985,6 +4013,9 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int>("OrganizationId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("SampleTypeId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("UnitId")
                         .HasColumnType("integer");
 
@@ -4001,6 +4032,8 @@ namespace VetLims.Infrastructure.Migrations
                     b.HasIndex("Name");
 
                     b.HasIndex("OrganizationId");
+
+                    b.HasIndex("SampleTypeId");
 
                     b.HasIndex("UnitId");
 
@@ -5460,6 +5493,11 @@ namespace VetLims.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("VetLims.Infrastructure.Entities.SampleType", "SampleType")
+                        .WithMany()
+                        .HasForeignKey("SampleTypeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("VetLims.Infrastructure.Entities.Unit", "Unit")
                         .WithMany()
                         .HasForeignKey("UnitId")
@@ -5468,6 +5506,8 @@ namespace VetLims.Infrastructure.Migrations
                     b.Navigation("Department");
 
                     b.Navigation("Organization");
+
+                    b.Navigation("SampleType");
 
                     b.Navigation("Unit");
                 });

@@ -11,6 +11,7 @@ type Row = {
   totalAmount: number;
   paidAmount: number;
   balance: number;
+  discountAmount: number;
 };
 type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
 
@@ -31,6 +32,7 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
             <th>Owner</th>
             <th>Barcode</th>
             <th>Total</th>
+            <th>Discount</th>
             <th>Paid</th>
             <th>Balance</th>
             <th class="text-end">Actions</th>
@@ -41,9 +43,10 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
             <td>{{ r.id }}</td>
             <td>{{ r.ownerName }}</td>
             <td>{{ r.barcode }}</td>
-            <td>{{ r.totalAmount }}</td>
-            <td>{{ r.paidAmount }}</td>
-            <td>{{ r.balance }}</td>
+            <td>{{ r.totalAmount | currency:'AED' }}</td>
+            <td>{{ r.discountAmount ? (r.discountAmount | currency:'AED') : '-' }}</td>
+            <td>{{ r.paidAmount | currency:'AED' }}</td>
+            <td>{{ r.balance | currency:'AED' }}</td>
             <td class="text-end">
               <button class="btn btn-sm btn-outline-success me-1" type="button" (click)="sendInvoice(r.id)">WhatsApp Invoice</button>
               <button class="btn btn-sm btn-outline-success" type="button" (click)="sendReceipt(r.id)">WhatsApp Receipt</button>

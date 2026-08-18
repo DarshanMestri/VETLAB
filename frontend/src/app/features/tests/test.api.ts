@@ -9,6 +9,7 @@ export interface Test {
   name: string;
   code?: string;
   departmentId: number;
+  sampleTypeId?: number | null;
   isActive: boolean;
 }
 export interface TestParam {

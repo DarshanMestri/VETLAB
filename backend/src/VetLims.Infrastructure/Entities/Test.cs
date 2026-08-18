@@ -14,6 +14,9 @@ public class Test : BaseEntity, IOrganizationOwned
     public TestValueType ValueType { get; set; } = TestValueType.Text;
     public bool IsActive { get; set; } = true;
 
+    public int? SampleTypeId { get; set; }
+    public SampleType? SampleType { get; set; }
+
     // ✅ Needed by .WithMany(t => t.Parameters)
     public ICollection<TestParameter> Parameters { get; set; } = new List<TestParameter>();
 }

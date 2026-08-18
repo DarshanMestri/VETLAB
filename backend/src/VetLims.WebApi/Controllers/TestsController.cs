@@ -57,7 +57,7 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
 
         var total = await q.CountAsync();
         var items = await q.OrderBy(x => x.Name).Skip((page-1)*pageSize).Take(pageSize)
-            .Select(x => new TestDto(x.Id, x.Name, x.DisplayName, x.Code, x.DepartmentId, x.UnitId, x.ValueType, x.IsActive))
+            .Select(x => new TestDto(x.Id, x.Name, x.DisplayName, x.Code, x.DepartmentId, x.UnitId, x.SampleTypeId, x.ValueType, x.IsActive))
             .ToListAsync();
 
         return Ok(new { total, items, page, pageSize });
@@ -83,6 +83,9 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
         if (dto.UnitId.HasValue && !await db.Units.AnyAsync(x => x.Id == dto.UnitId.Value))
             return BadRequest("Selected unit does not exist.");
 
+        if (dto.SampleTypeId.HasValue && !await db.SampleTypes.AnyAsync(x => x.Id == dto.SampleTypeId.Value && !x.IsDeleted))
+            return BadRequest("Selected sample type does not exist.");
+
         var code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
         if (code is not null && await db.Tests.AnyAsync(x => x.OrganizationId == organizationId.Value && x.Code != null && EF.Functions.ILike(x.Code, code) && !x.IsDeleted))
             return Conflict("Test code must be unique within your organization.");
@@ -95,6 +98,7 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
             OrganizationId = organizationId.Value,
             DepartmentId = dto.DepartmentId,
             UnitId = dto.UnitId,
+            SampleTypeId = dto.SampleTypeId,
             ValueType = dto.ValueType,
             IsActive = dto.IsActive
         };
@@ -118,7 +122,7 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
             return Problem(detail: "Unable to save test.", statusCode: 500);
         }
 
-        return CreatedAtAction(nameof(GetTest), new { id = e.Id }, new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.ValueType, e.IsActive));
+        return CreatedAtAction(nameof(GetTest), new { id = e.Id }, new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.SampleTypeId, e.ValueType, e.IsActive));
     }
 
     [HttpGet("{id:int}")]
@@ -130,7 +134,7 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
 
         var e = await db.Tests.FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (e is null) return NotFound();
-        return new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.ValueType, e.IsActive);
+        return new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.SampleTypeId, e.ValueType, e.IsActive);
     }
 
     [HttpPut("{id:int}")]
@@ -156,6 +160,9 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
         if (dto.UnitId.HasValue && !await db.Units.AnyAsync(x => x.Id == dto.UnitId.Value))
             return BadRequest("Selected unit does not exist.");
 
+        if (dto.SampleTypeId.HasValue && !await db.SampleTypes.AnyAsync(x => x.Id == dto.SampleTypeId.Value && !x.IsDeleted))
+            return BadRequest("Selected sample type does not exist.");
+
         var code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
         if (code is not null && await db.Tests.AnyAsync(x => x.OrganizationId == organizationId.Value && x.Id != id && x.Code != null && EF.Functions.ILike(x.Code, code) && !x.IsDeleted))
             return Conflict("Test code must be unique within your organization.");
@@ -165,6 +172,7 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
         e.Code = code;
         e.DepartmentId = dto.DepartmentId;
         e.UnitId = dto.UnitId;
+        e.SampleTypeId = dto.SampleTypeId;
         e.ValueType = dto.ValueType;
         e.IsActive = dto.IsActive;
         try
@@ -186,7 +194,7 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
             return Problem(detail: "Unable to update test.", statusCode: 500);
         }
 
-        return new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.ValueType, e.IsActive);
+        return new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.SampleTypeId, e.ValueType, e.IsActive);
     }
 
     [HttpPatch("{id:int}/status")]

@@ -4,6 +4,8 @@ public enum PaymentMethod { Cash = 1, Card = 2, Cheque = 3 }
 public enum RegItemType { Test = 1, Profile = 2, Package = 3, Medicine = 4 }
 public enum RegItemStatus { Pending = 1, InProgress = 2, Completed = 3, Canceled = 4 }
 public enum SampleWorkflowStatus { NotCollected = 1, Collected = 2, Received = 3, Processing = 4, Processed = 5 }
+public enum DiscountType { Percentage = 1, Amount = 2 }
+public enum AgeUnit { Days = 1, Months = 2, Years = 3 }
 
 public class Registration : BaseEntity
 {
@@ -39,10 +41,18 @@ public class Registration : BaseEntity
     public ICollection<RegistrationItem> Items { get; set; } = new List<RegistrationItem>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
-    public decimal TotalAmount { get; set; }     // sum of item prices (gross, includes VAT)
+    public decimal TotalAmount { get; set; }     // post-discount grand total (includes VAT)
     public decimal TotalVat { get; set; }        // sum of item VAT amounts
     public decimal PaidAmount { get; set; }      // sum of payments
     public decimal Balance => TotalAmount - PaidAmount;
+
+    public DiscountType? DiscountType { get; set; }
+    public decimal DiscountValue { get; set; }   // user-entered value (percentage 0-100 or amount)
+    public decimal DiscountAmount { get; set; }  // computed absolute discount in currency
+
+    // Registration-level patient age (single source of truth for all species/tests)
+    public int? AgeValue { get; set; }
+    public AgeUnit? AgeUnit { get; set; }
 }
 
 // public class RegistrationAnimal

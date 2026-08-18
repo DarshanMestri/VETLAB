@@ -9,6 +9,7 @@ interface OwnerListItem {
   id: number;
   code: string;
   name: string;
+  nameAr?: string | null;
   mobile?: string | null;
   whatsApp?: string | null;
   email?: string | null;
@@ -85,6 +86,7 @@ interface LookupsResponse {
 interface OwnerForm {
   code: string;
   name: string;
+  nameAr: string;
   mobile: string;
   whatsApp: string;
   email: string;
@@ -134,7 +136,7 @@ interface HistoryForm {
         <input
           class="form-control"
           [(ngModel)]="search"
-          placeholder="Search by owner code, name, or mobile"
+          placeholder="Search by owner code, name, Arabic name, or mobile"
           (keyup.enter)="loadOwners()"
         />
         <button class="btn btn-outline-secondary" (click)="loadOwners()">Search</button>
@@ -149,6 +151,7 @@ interface HistoryForm {
             <tr>
               <th>Owner Code</th>
               <th>Name</th>
+              <th>Name (Arabic)</th>
               <th>Mobile</th>
               <th>City</th>
               <th>Animals</th>
@@ -160,6 +163,7 @@ interface HistoryForm {
             <tr *ngFor="let item of owners()">
               <td>{{ item.code }}</td>
               <td>{{ item.name }}</td>
+              <td dir="rtl">{{ item.nameAr || '-' }}</td>
               <td>{{ item.mobile || '-' }}</td>
               <td>{{ item.city || '-' }}</td>
               <td>{{ item.animalCount }}</td>
@@ -198,23 +202,31 @@ interface HistoryForm {
                 <label class="form-label">Owner code *</label>
                 <input class="form-control" maxlength="50" [(ngModel)]="ownerForm.code" name="ownerCode" />
               </div>
-              <div class="col-md-8">
+              <div class="col-md-4">
                 <label class="form-label">Name *</label>
                 <input class="form-control" maxlength="200" [(ngModel)]="ownerForm.name" name="ownerName" />
               </div>
               <div class="col-md-4">
+                <label class="form-label">Name (Arabic)</label>
+                <input class="form-control" maxlength="200" dir="rtl" [(ngModel)]="ownerForm.nameAr" name="ownerNameAr" />
+              </div>
+              <div class="col-md-3">
                 <label class="form-label">Mobile</label>
                 <input class="form-control" maxlength="30" [(ngModel)]="ownerForm.mobile" name="mobile" />
               </div>
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <label class="form-label">WhatsApp</label>
                 <input class="form-control" maxlength="30" [(ngModel)]="ownerForm.whatsApp" name="whatsApp" />
               </div>
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <label class="form-label">Email</label>
                 <input type="email" class="form-control" maxlength="200" [(ngModel)]="ownerForm.email" name="email" />
               </div>
-              <div class="col-md-8">
+              <div class="col-md-3">
+                <label class="form-label">City</label>
+                <input class="form-control" maxlength="100" [(ngModel)]="ownerForm.city" name="city" />
+              </div>
+              <div class="col-md-12">
                 <label class="form-label">Address</label>
                 <input class="form-control" [(ngModel)]="ownerForm.address" name="address" />
               </div>
@@ -247,7 +259,7 @@ interface HistoryForm {
         <ng-container *ngIf="profileData() as owner">
           <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
             <div>
-              <h2 class="mb-1">{{ owner.name }}</h2>
+              <h2 class="mb-1">{{ owner.name }}<span *ngIf="owner.nameAr" class="ms-2 text-muted" dir="rtl">{{ owner.nameAr }}</span></h2>
               <div class="text-muted">{{ owner.code }} · {{ owner.mobile || 'No mobile' }} · {{ owner.city || 'No city' }}</div>
             </div>
             <div class="d-flex gap-2" *ngIf="canManage()">
@@ -262,6 +274,8 @@ interface HistoryForm {
                 <div class="card-header">Owner Profile</div>
                 <div class="card-body">
                   <dl class="row mb-0">
+                    <dt class="col-sm-4">Arabic Name</dt>
+                    <dd class="col-sm-8" dir="rtl">{{ owner.nameAr || '-' }}</dd>
                     <dt class="col-sm-4">Mobile</dt>
                     <dd class="col-sm-8">{{ owner.mobile || '-' }}</dd>
                     <dt class="col-sm-4">WhatsApp</dt>
@@ -401,12 +415,13 @@ interface HistoryForm {
               <form (ngSubmit)="saveOwner()" novalidate>
                 <div class="row g-3">
                   <div class="col-md-4"><label class="form-label">Owner code *</label><input class="form-control" maxlength="50" [(ngModel)]="ownerForm.code" name="profileOwnerCode" /></div>
-                  <div class="col-md-8"><label class="form-label">Name *</label><input class="form-control" maxlength="200" [(ngModel)]="ownerForm.name" name="profileOwnerName" /></div>
-                  <div class="col-md-4"><label class="form-label">Mobile</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.mobile" name="profileMobile" /></div>
-                  <div class="col-md-4"><label class="form-label">WhatsApp</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.whatsApp" name="profileWhatsApp" /></div>
-                  <div class="col-md-4"><label class="form-label">Email</label><input type="email" class="form-control" maxlength="200" [(ngModel)]="ownerForm.email" name="profileEmail" /></div>
-                  <div class="col-md-8"><label class="form-label">Address</label><input class="form-control" [(ngModel)]="ownerForm.address" name="profileAddress" /></div>
-                  <div class="col-md-4"><label class="form-label">City</label><input class="form-control" maxlength="100" [(ngModel)]="ownerForm.city" name="profileCity" /></div>
+                  <div class="col-md-4"><label class="form-label">Name *</label><input class="form-control" maxlength="200" [(ngModel)]="ownerForm.name" name="profileOwnerName" /></div>
+                  <div class="col-md-4"><label class="form-label">Name (Arabic)</label><input class="form-control" maxlength="200" dir="rtl" [(ngModel)]="ownerForm.nameAr" name="profileOwnerNameAr" /></div>
+                  <div class="col-md-3"><label class="form-label">Mobile</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.mobile" name="profileMobile" /></div>
+                  <div class="col-md-3"><label class="form-label">WhatsApp</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.whatsApp" name="profileWhatsApp" /></div>
+                  <div class="col-md-3"><label class="form-label">Email</label><input type="email" class="form-control" maxlength="200" [(ngModel)]="ownerForm.email" name="profileEmail" /></div>
+                  <div class="col-md-3"><label class="form-label">City</label><input class="form-control" maxlength="100" [(ngModel)]="ownerForm.city" name="profileCity" /></div>
+                  <div class="col-md-12"><label class="form-label">Address</label><input class="form-control" [(ngModel)]="ownerForm.address" name="profileAddress" /></div>
                   <div class="col-12"><div class="form-check"><input id="profileOwnerActive" class="form-check-input" type="checkbox" [(ngModel)]="ownerForm.isActive" name="profileOwnerIsActive" /><label class="form-check-label" for="profileOwnerActive">Active</label></div></div>
                 </div>
                 <div class="text-end mt-3">
@@ -422,7 +437,7 @@ interface HistoryForm {
             <div class="card-body">
               <form (ngSubmit)="saveAnimal()" novalidate>
                 <div class="row g-3">
-                  <div class="col-md-4"><label class="form-label">Animal code *</label><input class="form-control" maxlength="50" [(ngModel)]="animalForm.code" name="animalCode" /></div>
+                  <div class="col-md-4"><label class="form-label">Animal code *</label><input class="form-control" maxlength="50" [(ngModel)]="animalForm.code" name="animalCode" placeholder="e.g., A-001" /></div>
                   <div class="col-md-8"><label class="form-label">Name *</label><input class="form-control" maxlength="200" [(ngModel)]="animalForm.name" name="animalName" /></div>
                   <div class="col-md-3"><label class="form-label">Species *</label><select class="form-select" [(ngModel)]="animalForm.speciesId" name="speciesId"><option [ngValue]="null">Select species</option><option *ngFor="let item of lookups().species" [ngValue]="item.id">{{ item.name }}</option></select></div>
                   <div class="col-md-3"><label class="form-label">Breed</label><select class="form-select" [(ngModel)]="animalForm.breedId" name="breedId"><option [ngValue]="null">Select breed</option><option *ngFor="let item of lookups().breeds" [ngValue]="item.id">{{ item.name }}</option></select></div>
@@ -583,6 +598,7 @@ export class OwnerManagementComponent implements OnInit {
     this.ownerForm = {
       code: owner.code,
       name: owner.name,
+      nameAr: owner.nameAr ?? '',
       mobile: owner.mobile ?? '',
       whatsApp: owner.whatsApp ?? '',
       email: owner.email ?? '',
@@ -609,6 +625,7 @@ export class OwnerManagementComponent implements OnInit {
     const payload = {
       code: this.ownerForm.code.trim(),
       name: this.ownerForm.name.trim(),
+      nameAr: this.cleanString(this.ownerForm.nameAr),
       mobile: this.cleanString(this.ownerForm.mobile),
       whatsApp: this.cleanString(this.ownerForm.whatsApp),
       email: this.cleanString(this.ownerForm.email),
@@ -677,7 +694,10 @@ export class OwnerManagementComponent implements OnInit {
   }
 
   saveAnimal(): void {
-    if (!this.ownerId) return;
+    if (!this.ownerId) {
+      this.error.set('Cannot save animal: owner context is missing.');
+      return;
+    }
 
     const validationMessage = this.validateAnimalForm();
     if (validationMessage) {
@@ -858,7 +878,7 @@ export class OwnerManagementComponent implements OnInit {
   }
 
   private emptyOwner(): OwnerForm {
-    return { code: '', name: '', mobile: '', whatsApp: '', email: '', address: '', city: '', isActive: true };
+    return { code: '', name: '', nameAr: '', mobile: '', whatsApp: '', email: '', address: '', city: '', isActive: true };
   }
 
   private emptyAnimal(): AnimalForm {

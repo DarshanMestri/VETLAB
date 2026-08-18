@@ -5,6 +5,7 @@ public class Owner : BaseEntity
     // Step 6: durable owner master. Registration.OwnerName remains unchanged for legacy compatibility.
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? NameAr { get; set; }
     public string? Mobile { get; set; }
     public string? WhatsApp { get; set; }
     public string? Email { get; set; }
