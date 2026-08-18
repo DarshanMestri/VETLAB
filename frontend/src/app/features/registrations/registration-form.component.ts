@@ -142,6 +142,18 @@ type CreateDto = {
               <input class="form-control" dir="rtl" lang="ar" [(ngModel)]="model.ownerNameAr" name="ownerNameAr" placeholder="&#1575;&#1604;&#1573;&#1587;&#1605;" />
             </div>
             <div class="mb-3">
+              <label class="form-label fw-semibold">Patient Age <small class="text-muted">(applies to all species)</small></label>
+              <div class="input-group">
+                <input class="form-control" type="number" min="0" step="1"
+                       [(ngModel)]="ageValue" name="ageValue"
+                       placeholder="e.g. 5" />
+                <select class="form-select" style="max-width: 130px;" [(ngModel)]="ageUnit" name="ageUnit">
+                  <option *ngFor="let u of ageUnitOptions" [ngValue]="u.value">{{ u.label }}</option>
+                </select>
+              </div>
+              <div class="form-text">Used for species-wise reference range matching.</div>
+            </div>
+            <div class="mb-3">
               <label class="form-label fw-semibold">Mobile</label>
               <input class="form-control" [(ngModel)]="model.ownerMobile" name="ownerMobile" placeholder="Mobile number" />
             </div>
@@ -174,19 +186,6 @@ type CreateDto = {
               <label class="form-label fw-semibold">Clinical Notes</label>
               <textarea class="form-control" rows="3" [(ngModel)]="model.clinicalNotes" name="clinicalNotes" placeholder="Optional notes"></textarea>
             </div>
-
-            <div class="mt-3 pt-3 border-top">
-              <label class="form-label fw-semibold">Patient Age <small class="text-muted">(applies to all species)</small></label>
-              <div class="input-group">
-                <input class="form-control" type="number" min="0" step="1"
-                       [(ngModel)]="ageValue" name="ageValue"
-                       placeholder="e.g. 5" />
-                <select class="form-select" style="max-width: 130px;" [(ngModel)]="ageUnit" name="ageUnit">
-                  <option *ngFor="let u of ageUnitOptions" [ngValue]="u.value">{{ u.label }}</option>
-                </select>
-              </div>
-              <div class="form-text">Used for species-wise reference range matching.</div>
-            </div>
           </div>
         </div>
 
@@ -212,7 +211,7 @@ type CreateDto = {
                 </div>
                 <div class="col-md-2">
                   <label class="small fw-semibold">Count</label>
-                  <input class="form-control form-control-sm" type="number" min="1" step="1" [(ngModel)]="speciesCount" name="speciesCount" />
+                  <input class="form-control form-control-sm" type="number" min="1" max="50" step="1" [(ngModel)]="speciesCount" name="speciesCount" />
                 </div>
                 <div class="col-md-4 d-flex gap-2">
                   <button class="btn btn-sm btn-outline-success" [disabled]="speciesDropdownId == null || speciesCount < 1"
@@ -288,22 +287,25 @@ type CreateDto = {
                   <div class="col-auto">
                     <div class="btn-group btn-group-sm" role="group">
                       <button *ngFor="let t of itemTypeOptions" class="btn"
-                              [class.btn-primary]="pickerType === t.value && pickerSpeciesId === sp.id"
-                              [class.btn-outline-primary]="pickerType !== t.value || pickerSpeciesId !== sp.id"
-                              type="button" (click)="setPickerType(t.value); pickerSpeciesId = sp.id">{{ t.label }}</button>
+                              [class.btn-primary]="getPickerType(sp.id) === t.value"
+                              [class.btn-outline-primary]="getPickerType(sp.id) !== t.value"
+                              type="button" (click)="setPickerTypeForSpecies(sp.id, t.value)">{{ t.label }}</button>
                     </div>
                   </div>
                   <div class="col">
-                    <select class="form-select form-select-sm" [(ngModel)]="pickerItemId" [attr.name]="'picker_' + sp.id">
-                      <option [ngValue]="null">Select {{ typeLabel(pickerType) }}...</option>
-                      <option *ngFor="let o of orderablesByType(pickerType)" [ngValue]="o.id">
+                    <select class="form-select form-select-sm"
+                            [ngModel]="getPickerItemId(sp.id)"
+                            (ngModelChange)="setPickerItemIdForSpecies(sp.id, $event)"
+                            [attr.name]="'picker_' + sp.id">
+                      <option [ngValue]="null">Select {{ typeLabel(getPickerType(sp.id)) }}...</option>
+                      <option *ngFor="let o of orderablesByType(getPickerType(sp.id))" [ngValue]="o.id">
                         {{ o.name }}<span *ngIf="o.code"> &middot; {{ o.code }}</span>
                       </option>
                     </select>
                   </div>
                   <div class="col-auto">
-                    <button class="btn btn-sm btn-outline-primary" [disabled]="!pickerItemId" type="button"
-                            (click)="pickerSpeciesId = sp.id; addOrder()">+ Add</button>
+                    <button class="btn btn-sm btn-outline-primary" [disabled]="!getPickerItemId(sp.id)" type="button"
+                            (click)="addOrder(sp.id)">+ Add</button>
                   </div>
                 </div>
 
@@ -351,22 +353,25 @@ type CreateDto = {
                   <div class="col-auto">
                     <div class="btn-group btn-group-sm" role="group">
                       <button *ngFor="let t of itemTypeOptions" class="btn"
-                              [class.btn-primary]="pickerType === t.value && pickerSpeciesId === null"
-                              [class.btn-outline-primary]="pickerType !== t.value || pickerSpeciesId !== null"
-                              type="button" (click)="setPickerType(t.value); pickerSpeciesId = null">{{ t.label }}</button>
+                              [class.btn-primary]="getPickerType(null) === t.value"
+                              [class.btn-outline-primary]="getPickerType(null) !== t.value"
+                              type="button" (click)="setPickerTypeForSpecies(null, t.value)">{{ t.label }}</button>
                     </div>
                   </div>
                   <div class="col">
-                    <select class="form-select form-select-sm" [(ngModel)]="pickerItemId" name="picker_global">
-                      <option [ngValue]="null">Select...</option>
-                      <option *ngFor="let o of orderablesByType(pickerType)" [ngValue]="o.id">
+                    <select class="form-select form-select-sm"
+                            [ngModel]="getPickerItemId(null)"
+                            (ngModelChange)="setPickerItemIdForSpecies(null, $event)"
+                            name="picker_global">
+                      <option [ngValue]="null">Select {{ typeLabel(getPickerType(null)) }}...</option>
+                      <option *ngFor="let o of orderablesByType(getPickerType(null))" [ngValue]="o.id">
                         {{ o.name }}<span *ngIf="o.code"> &middot; {{ o.code }}</span>
                       </option>
                     </select>
                   </div>
                   <div class="col-auto">
-                    <button class="btn btn-sm btn-outline-primary" [disabled]="!pickerItemId" type="button"
-                            (click)="pickerSpeciesId = null; addOrder()">+ Add</button>
+                    <button class="btn btn-sm btn-outline-primary" [disabled]="!getPickerItemId(null)" type="button"
+                            (click)="addOrder(null)">+ Add</button>
                   </div>
                 </div>
 
@@ -584,9 +589,7 @@ export class RegistrationFormComponent {
   speciesDropdownId: number | null = null;
   speciesCount = 1;
   quickAnimalId: number | null = null;
-  pickerType: RegItemType = RegItemType.Test;
-  pickerItemId: number | null = null;
-  pickerSpeciesId: number | null = null;
+  speciesPickerState = new Map<number | null, { type: RegItemType; itemId: number | null }>();
   orderableSearch = '';
 
   // Owner typeahead
@@ -614,63 +617,55 @@ export class RegistrationFormComponent {
 
   model: CreateDto = this.createEmptyModel();
 
-  // --- Computed ---
+  // --- Cached Computed State ---
+  cachedSubtotal = 0;
+  cachedVatTotal = 0;
+  cachedDiscountAmount = 0;
+  cachedNetTotal = 0;
+  cachedBalanceDue = 0;
+  cachedUniqueSpecies: { id: number; name: string }[] = [];
+  cachedItemsBySpecies = new Map<number | null, { itemType: RegItemType; itemId?: number | null; speciesId?: number | null; sampleTypeId?: number | null }[]>();
+  cachedAnimalCountBySpecies = new Map<number, number>();
+  cachedTotalAnimals = 0;
+  cachedOrderableMap = new Map<string, string>();
+  cachedSampleTypeMap = new Map<number, string>();
 
-  get selectedItems() {
-    return this.model.items.filter((item) => item.itemId);
-  }
+  // --- Computed (cheap lookups only) ---
 
   get selectedCount() {
-    return this.selectedItems.length;
+    return this.model.items.filter((item) => item.itemId).length;
   }
 
   get animalCount() {
-    return this.model.animals.length;
+    return this.cachedTotalAnimals;
   }
 
-  get uniqueSpecies(): { id: number; name: string }[] {
-    const map = new Map<number, string>();
-    for (const a of this.model.animals) {
-      if (a.speciesId && !map.has(a.speciesId)) {
-        const sp = this.species.find((s) => s.id === a.speciesId);
-        if (sp) map.set(a.speciesId, sp.name);
-      }
-    }
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  get uniqueSpecies() {
+    return this.cachedUniqueSpecies;
   }
 
   get subtotal() {
-    return this.model.items.reduce((sum, item) => sum + this.lineNet(item), 0);
+    return this.cachedSubtotal;
   }
 
   get vatTotal() {
-    return this.model.items.reduce((sum, item) => sum + this.lineVat(item), 0);
+    return this.cachedVatTotal;
   }
 
-  get discountAmount(): number {
-    if (!this.discountType || !this.discountValue || this.discountValue <= 0) return 0;
-    const base = this.subtotal + this.vatTotal;
-    if (this.discountType === DiscountType.Percentage) {
-      if (this.discountValue > 100) return base;
-      return Math.round(base * this.discountValue * 100) / 10000;
-    }
-    return Math.min(this.discountValue, base);
+  get discountAmount() {
+    return this.cachedDiscountAmount;
   }
 
-  get netTotal(): number {
-    return Math.max(this.subtotal + this.vatTotal - this.discountAmount, 0);
+  get netTotal() {
+    return this.cachedNetTotal;
   }
 
   get grandTotal() {
-    return this.netTotal;
-  }
-
-  get paidAmount() {
-    return this.model.initialPaymentAmount ?? 0;
+    return this.cachedNetTotal;
   }
 
   get balanceDue() {
-    return Math.max(this.grandTotal - this.paidAmount, 0);
+    return this.cachedBalanceDue;
   }
 
   get filteredAnimals(): AnimalOption[] {
@@ -692,6 +687,93 @@ export class RegistrationFormComponent {
     if (!this.ageValue || this.ageValue <= 0) return '';
     const unit = this.ageUnitOptions.find((u) => u.value === this.ageUnit)?.label ?? '';
     return `${this.ageValue} ${unit}`;
+  }
+
+  get paidAmount() {
+    return this.model.initialPaymentAmount ?? 0;
+  }
+
+  // --- Cache Rebuild Methods ---
+
+  private rebuildCaches() {
+    this.rebuildSpeciesCache();
+    this.rebuildItemsBySpeciesCache();
+    this.rebuildOrderableMaps();
+    this.recalculateTotals();
+  }
+
+  private rebuildSpeciesCache() {
+    const speciesMap = new Map<number, string>();
+    const countMap = new Map<number, number>();
+    let total = 0;
+    for (const a of this.model.animals) {
+      total++;
+      if (a.speciesId) {
+        countMap.set(a.speciesId, (countMap.get(a.speciesId) ?? 0) + 1);
+        if (!speciesMap.has(a.speciesId)) {
+          const sp = this.species.find((s) => s.id === a.speciesId);
+          if (sp) speciesMap.set(a.speciesId, sp.name);
+        }
+      }
+    }
+    this.cachedTotalAnimals = total;
+    this.cachedAnimalCountBySpecies = countMap;
+    this.cachedUniqueSpecies = Array.from(speciesMap.entries()).map(([id, name]) => ({ id, name }));
+  }
+
+  private rebuildItemsBySpeciesCache() {
+    const map = new Map<number | null, typeof this.model.items>();
+    for (const item of this.model.items) {
+      if (!item.itemId) continue;
+      const key = item.speciesId ?? null;
+      const arr = map.get(key);
+      if (arr) {
+        arr.push(item);
+      } else {
+        map.set(key, [item]);
+      }
+    }
+    this.cachedItemsBySpecies = map;
+  }
+
+  private rebuildOrderableMaps() {
+    this.cachedOrderableMap.clear();
+    for (const o of this.orderables) {
+      this.cachedOrderableMap.set(`${o.itemType}:${o.id}`, o.name);
+    }
+    this.cachedSampleTypeMap.clear();
+    for (const s of this.sampleTypes) {
+      this.cachedSampleTypeMap.set(s.id, s.name);
+    }
+  }
+
+  recalculateTotals() {
+    let subtotal = 0;
+    let vatTotal = 0;
+    for (const item of this.model.items) {
+      if (!item.itemId) continue;
+      const qty = this.cachedAnimalCountBySpecies.get(item.speciesId ?? 0) ?? this.cachedTotalAnimals;
+      const rate = this.priceInfo(item.itemType, item.itemId ?? null);
+      subtotal += rate.rate * qty;
+      if (rate.rate > 0) {
+        vatTotal += Math.round(rate.rate * rate.vatRate) / 100 * qty;
+      }
+    }
+    this.cachedSubtotal = subtotal;
+    this.cachedVatTotal = vatTotal;
+
+    const base = subtotal + vatTotal;
+    let discount = 0;
+    if (this.discountType && this.discountValue && this.discountValue > 0) {
+      if (this.discountType === DiscountType.Percentage) {
+        discount = this.discountValue > 100 ? base : Math.round(base * this.discountValue * 100) / 10000;
+      } else {
+        discount = Math.min(this.discountValue, base);
+      }
+    }
+    this.cachedDiscountAmount = discount;
+    this.cachedNetTotal = Math.max(base - discount, 0);
+    this.cachedBalanceDue = Math.max(this.cachedNetTotal - this.paidAmount, 0);
   }
 
   // --- Lifecycle ---
@@ -759,6 +841,7 @@ export class RegistrationFormComponent {
       this.species = res.species ?? [];
       this.sampleTypes = res.sampleTypes ?? [];
       this.orderables = res.orderables ?? [];
+      this.rebuildCaches();
     });
   }
 
@@ -813,7 +896,7 @@ export class RegistrationFormComponent {
   onClientChange() {
     this.priceMap.clear();
     const clientId = this.model.clientId;
-    if (!clientId) return;
+    if (!clientId) { this.recalculateTotals(); return; }
     this.http
       .get<{ itemType: number; itemId: number; rate: number; vatRate: number }[]>('/api/registrations/prices', {
         params: { clientId: String(clientId) },
@@ -822,6 +905,7 @@ export class RegistrationFormComponent {
         this.priceMap = new Map(
           rates.map((rate) => [`${rate.itemType}:${rate.itemId}`, { rate: rate.rate, vatRate: rate.vatRate }]),
         );
+        this.recalculateTotals();
       });
   }
 
@@ -839,6 +923,9 @@ export class RegistrationFormComponent {
     }
     this.speciesDropdownId = null;
     this.speciesCount = 1;
+    this.rebuildSpeciesCache();
+    this.rebuildItemsBySpeciesCache();
+    this.recalculateTotals();
   }
 
   addExistingAnimal() {
@@ -851,55 +938,101 @@ export class RegistrationFormComponent {
     }
     this.model.animals.push({ speciesId: animal.speciesId, animalName: animal.name, animalId: animal.id });
     this.quickAnimalId = null;
+    this.rebuildSpeciesCache();
+    this.rebuildItemsBySpeciesCache();
+    this.recalculateTotals();
   }
 
   addAnimal() {
     this.model.animals.push({ speciesId: null, animalName: '', animalId: null });
+    this.rebuildSpeciesCache();
+    this.rebuildItemsBySpeciesCache();
+    this.recalculateTotals();
   }
 
   removeAnimal(index: number) {
     this.model.animals.splice(index, 1);
+    this.rebuildSpeciesCache();
+    this.rebuildItemsBySpeciesCache();
+    this.recalculateTotals();
   }
 
   animalCountOf(speciesId: number | null | undefined) {
-    if (!speciesId) return this.model.animals.length;
-    return this.model.animals.filter((animal) => animal.speciesId === speciesId).length;
+    if (!speciesId) return this.cachedTotalAnimals;
+    return this.cachedAnimalCountBySpecies.get(speciesId) ?? 0;
   }
 
   // --- Test Order Management ---
 
-  setPickerType(itemType: RegItemType) {
-    this.pickerType = itemType;
-    this.pickerItemId = null;
+  private getPickerState(speciesId: number | null): { type: RegItemType; itemId: number | null } {
+    let state = this.speciesPickerState.get(speciesId ?? null);
+    if (!state) {
+      state = { type: RegItemType.Test, itemId: null };
+      this.speciesPickerState.set(speciesId ?? null, state);
+    }
+    return state;
+  }
+
+  getPickerType(speciesId: number | null): RegItemType {
+    return this.getPickerState(speciesId).type;
+  }
+
+  getPickerItemId(speciesId: number | null): number | null {
+    return this.getPickerState(speciesId).itemId;
+  }
+
+  setPickerTypeForSpecies(speciesId: number | null, type: RegItemType) {
+    const state = this.getPickerState(speciesId);
+    state.type = type;
+    state.itemId = null;
+  }
+
+  setPickerItemIdForSpecies(speciesId: number | null, itemId: number | null) {
+    this.getPickerState(speciesId).itemId = itemId;
   }
 
   typeLabel(itemType: RegItemType) {
     return this.itemTypeOptions.find((t) => t.value === itemType)?.label ?? 'item';
   }
 
-  addOrder() {
-    if (!this.pickerItemId) return;
+  addOrder(speciesId: number | null) {
+    const state = this.getPickerState(speciesId);
+    if (!state.itemId) return;
+    const exists = this.model.items.some(
+      (i) => i.itemType === state.type && i.itemId === state.itemId && (i.speciesId ?? null) === (speciesId ?? null),
+    );
+    if (exists) {
+      this.errorMessage = 'This item is already ordered for this species.';
+      return;
+    }
+    this.errorMessage = '';
     const orderable = this.orderables.find(
-      (o) => o.itemType === this.pickerType && o.id === this.pickerItemId,
+      (o) => o.itemType === state.type && o.id === state.itemId,
     );
     this.model.items.push({
-      itemType: this.pickerType,
-      itemId: this.pickerItemId,
-      speciesId: this.pickerSpeciesId,
+      itemType: state.type,
+      itemId: state.itemId,
+      speciesId: speciesId,
       sampleTypeId: orderable?.sampleTypeId ?? null,
     });
-    this.pickerItemId = null;
+    state.itemId = null;
+    this.rebuildItemsBySpeciesCache();
+    this.recalculateTotals();
   }
 
   removeItemByRef(item: { itemType: RegItemType; itemId?: number | null; speciesId?: number | null }) {
     const idx = this.model.items.findIndex(
       (i) => i.itemType === item.itemType && i.itemId === item.itemId && i.speciesId === item.speciesId,
     );
-    if (idx >= 0) this.model.items.splice(idx, 1);
+    if (idx >= 0) {
+      this.model.items.splice(idx, 1);
+      this.rebuildItemsBySpeciesCache();
+      this.recalculateTotals();
+    }
   }
 
   itemsForSpecies(speciesId: number | null) {
-    return this.model.items.filter((item) => item.speciesId === speciesId && item.itemId);
+    return this.cachedItemsBySpecies.get(speciesId ?? null) ?? [];
   }
 
   orderablesByType(itemType: RegItemType) {
@@ -911,59 +1044,42 @@ export class RegistrationFormComponent {
     });
   }
 
-  // --- Pricing Helpers ---
+  // --- Pricing Helpers (cheap lookups) ---
 
   priceInfo(itemType: RegItemType, itemId: number | null): PriceInfo {
     if (!itemId) return { rate: 0, vatRate: 0 };
     return this.priceMap.get(`${itemType}:${itemId}`) ?? { rate: 0, vatRate: 0 };
   }
 
-  priceForItem(itemType: RegItemType, itemId: number | null) {
-    return this.priceInfo(itemType, itemId).rate;
-  }
-
-  vatRateForItem(itemType: RegItemType, itemId: number | null) {
-    return this.priceInfo(itemType, itemId).vatRate;
-  }
-
-  vatAmountForItem(itemType: RegItemType, itemId: number | null) {
-    const info = this.priceInfo(itemType, itemId);
-    if (info.rate <= 0) return 0;
-    return Math.round(info.rate * info.vatRate) / 100;
-  }
-
   priceFor(item: { itemType: RegItemType; itemId?: number | null }) {
-    return this.priceForItem(item.itemType, item.itemId ?? null);
+    return this.priceInfo(item.itemType, item.itemId ?? null).rate;
   }
 
   vatRateFor(item: { itemType: RegItemType; itemId?: number | null }) {
-    return this.vatRateForItem(item.itemType, item.itemId ?? null);
-  }
-
-  lineNet(item: { itemType: RegItemType; itemId?: number | null; speciesId?: number | null }) {
-    return this.priceFor(item) * this.quantityFor(item);
-  }
-
-  lineVat(item: { itemType: RegItemType; itemId?: number | null; speciesId?: number | null }) {
-    return this.vatAmountForItem(item.itemType, item.itemId ?? null) * this.quantityFor(item);
-  }
-
-  lineTotal(item: { itemType: RegItemType; itemId?: number | null; speciesId?: number | null }) {
-    return this.lineNet(item) + this.lineVat(item);
+    return this.priceInfo(item.itemType, item.itemId ?? null).vatRate;
   }
 
   quantityFor(item: { speciesId?: number | null }) {
     return this.animalCountOf(item.speciesId);
   }
 
+  lineVat(item: { itemType: RegItemType; itemId?: number | null; speciesId?: number | null }) {
+    const info = this.priceInfo(item.itemType, item.itemId ?? null);
+    if (info.rate <= 0) return 0;
+    return Math.round(info.rate * info.vatRate) / 100 * this.quantityFor(item);
+  }
+
+  lineTotal(item: { itemType: RegItemType; itemId?: number | null; speciesId?: number | null }) {
+    return this.priceFor(item) * this.quantityFor(item) + this.lineVat(item);
+  }
+
   itemName(item: { itemType: RegItemType; itemId?: number | null }) {
-    const found = this.orderables.find((option) => option.itemType === item.itemType && option.id === item.itemId);
-    return found ? found.name : '\u2014';
+    return this.cachedOrderableMap.get(`${item.itemType}:${item.itemId}`) ?? '\u2014';
   }
 
   sampleTypeName(sampleTypeId: number | null | undefined): string {
     if (!sampleTypeId) return 'Any';
-    return this.sampleTypes.find((s) => s.id === sampleTypeId)?.name ?? 'Any';
+    return this.cachedSampleTypeMap.get(sampleTypeId) ?? 'Any';
   }
 
   // --- Discount Management ---
@@ -971,17 +1087,20 @@ export class RegistrationFormComponent {
   toggleDiscountType(type: DiscountType) {
     this.discountType = this.discountType === type ? null : type;
     if (!this.discountType) this.discountValue = null;
+    this.recalculateTotals();
   }
 
   clearDiscount() {
     this.discountType = null;
     this.discountValue = null;
+    this.recalculateTotals();
   }
 
   // --- Payment ---
 
   onPaymentAmountChange(value: number | null) {
     this.model.initialPaymentAmount = typeof value === 'number' && !Number.isNaN(value) ? value : null;
+    this.recalculateTotals();
   }
 
   selectPaymentMethod(method: PaymentMethodType) {
@@ -989,8 +1108,9 @@ export class RegistrationFormComponent {
   }
 
   payInFull() {
-    if (this.grandTotal > 0) {
-      this.model.initialPaymentAmount = this.grandTotal;
+    if (this.cachedNetTotal > 0) {
+      this.model.initialPaymentAmount = this.cachedNetTotal;
+      this.recalculateTotals();
     }
   }
 
@@ -1026,8 +1146,7 @@ export class RegistrationFormComponent {
     this.quickAnimalId = null;
     this.ownerSearch = '';
     this.ownerSearchResults = [];
-    this.pickerItemId = null;
-    this.pickerSpeciesId = null;
+    this.speciesPickerState.clear();
     this.orderableSearch = '';
     this.discountType = null;
     this.discountValue = null;
@@ -1035,6 +1154,7 @@ export class RegistrationFormComponent {
     this.ageUnit = AgeUnit.Years;
     this.priceMap.clear();
     this.model = this.createEmptyModel();
+    this.rebuildCaches();
   }
 
   save() {
@@ -1071,7 +1191,7 @@ export class RegistrationFormComponent {
     if (amount && amount > 0 && !this.model.initialPaymentMethod) {
       errors.push('Select a payment mode for the initial payment.');
     }
-    if (amount && amount > 0 && this.grandTotal > 0 && amount > this.grandTotal) {
+    if (amount && amount > 0 && this.cachedNetTotal > 0 && amount > this.cachedNetTotal) {
       errors.push('Initial payment cannot exceed the net total.');
     }
     if (this.discountType && this.discountValue != null) {
