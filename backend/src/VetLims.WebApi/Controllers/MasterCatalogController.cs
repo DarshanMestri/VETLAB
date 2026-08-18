@@ -37,7 +37,7 @@ public sealed class MasterCatalogController(VetLimsDbContext db) : ControllerBas
         var result = masterType switch
         {
             MasterType.Species => await PageAsync(db.Species, term, page, pageSize,
-                x => new SpeciesDto(x.Id, x.Code, x.Name), cancellationToken),
+                x => new SpeciesDto(x.Id, x.Code, x.Name, x.IsActive), cancellationToken),
             MasterType.Departments => await PageAsync(db.Departments, term, page, pageSize,
                 x => new DepartmentDto(x.Id, x.Name, x.Code, x.IsActive), cancellationToken),
             MasterType.Units => await PageUnitsAsync(term, page, pageSize, cancellationToken),
@@ -104,15 +104,18 @@ public sealed class MasterCatalogController(VetLimsDbContext db) : ControllerBas
         return Ok(Map(masterType, entity));
     }
 
-    [HttpDelete("{type}/{id:int}")]
-    public async Task<IActionResult> Delete(string type, int id, CancellationToken cancellationToken = default)
+    [HttpPatch("{type}/{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(string type, int id, [FromBody] bool isActive, CancellationToken cancellationToken = default)
     {
         if (!TryParseType(type, out var masterType)) return NotFound(UnsupportedType(type));
         var entity = await FindAsync(masterType, id, cancellationToken);
         if (entity is null || entity.IsDeleted) return NotFound();
 
-        // The DbContext turns this into a soft delete and preserves audit history.
-        db.Remove(entity);
+        var statusProperty = entity.GetType().GetProperty("IsActive");
+        if (statusProperty is null || !statusProperty.CanWrite)
+            return BadRequest(new { message = $"{masterType.ToDisplayName()} does not support active status." });
+
+        statusProperty.SetValue(entity, isActive);
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -287,7 +290,7 @@ public sealed class MasterCatalogController(VetLimsDbContext db) : ControllerBas
 
     private static object Map(MasterType type, BaseEntity entity) => entity switch
     {
-        Species x => new SpeciesDto(x.Id, x.Code, x.Name),
+        Species x => new SpeciesDto(x.Id, x.Code, x.Name, x.IsActive),
         Department x => new DepartmentDto(x.Id, x.Name, x.Code, x.IsActive),
         Unit x => new UnitDto(x.Id, x.Name, x.Symbol, x.IsActive),
         Breed x => new BreedDto(x.Id, x.Code, x.Name, x.Description, x.IsActive),

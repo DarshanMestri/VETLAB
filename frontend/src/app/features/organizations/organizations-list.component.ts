@@ -52,7 +52,9 @@ import { OrganizationsService } from './organizations.service';
               </td>
               <td class="text-end">
                 <button class="btn btn-sm btn-outline-primary me-1" (click)="openEdit(row)">Edit</button>
-                <button class="btn btn-sm btn-outline-danger" (click)="remove(row)">Delete</button>
+                <button class="btn btn-sm btn-outline-secondary" (click)="toggleStatus(row)">
+                  {{ row.isActive ? 'Deactivate' : 'Activate' }}
+                </button>
               </td>
             </tr>
           </tbody>
@@ -178,9 +180,11 @@ export class OrganizationsListComponent implements OnInit {
     });
   }
 
-  remove(row: any): void {
-    if (!confirm(`Delete ${row.name}? This will hide it from master lists.`)) return;
-    this.svc.delete(row.id).subscribe({ next: () => this.load(), error: (err) => (this.error.set(this.extractMessage(err))) });
+  toggleStatus(row: any): void {
+    this.svc.toggleStatus(row.id, !row.isActive).subscribe({
+      next: () => this.load(),
+      error: (err) => (this.error.set(this.extractMessage(err))),
+    });
   }
 
   load(): void {

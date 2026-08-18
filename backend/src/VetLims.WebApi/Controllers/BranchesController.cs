@@ -147,23 +147,6 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
-        if (!organizationId.HasValue)
-            return Forbid();
-
-        var item = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
-        if (item is null) return NotFound();
-
-        item.IsDeleted = true;
-        item.DeletedDate = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-        return NoContent();
-    }
-
     private Task<int?> ResolveCurrentOrganizationIdAsync()
     {
         var orgId = currentUserService.OrganizationId;

@@ -1,9 +1,8 @@
-// Step 1: ClientsController — create/read/update/delete Clients
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VetLims.WebApi.DTOs;
-using VetLims.Infrastructure;                 // AppDbContext (adjust if different)
-using VetLims.Infrastructure.Entities;        // Client entity
+using VetLims.Infrastructure;
+using VetLims.Infrastructure.Entities;
 
 namespace VetLims.WebApi.Controllers;
 
@@ -14,19 +13,31 @@ public class ClientsController : ControllerBase
     private readonly VetLimsDbContext _db;
     public ClientsController(VetLimsDbContext db) => _db = db;
 
-    // POST /api/clients
     [HttpPost]
     public async Task<ActionResult<ClientDto>> Create([FromBody] ClientCreateDto dto)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
+        var name = dto.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Client name is required." });
+
+        var code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
+
+        if (code != null)
+        {
+            var exists = await _db.Clients.AnyAsync(c => c.Code == code && !c.IsDeleted);
+            if (exists)
+                return Conflict(new { message = $"A client with code '{code}' already exists." });
+        }
+
         var entity = new Client
         {
-            Name = dto.Name.Trim(),
-            Code = dto.Code?.Trim(),
-            Phone = dto.Phone?.Trim(),
-            Email = dto.Email?.Trim(),
-            Address = dto.Address?.Trim(),
+            Name = name,
+            Code = code,
+            Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim(),
+            Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim(),
+            Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim(),
             IsActive = dto.IsActive
         };
 
@@ -37,7 +48,6 @@ public class ClientsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, result);
     }
 
-    // GET /api/clients
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ClientDto>>> GetAll(
         [FromQuery] string? search = null,
@@ -47,7 +57,7 @@ public class ClientsController : ControllerBase
         page = page <= 0 ? 1 : page;
         pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
 
-        IQueryable<Client> q = _db.Clients.AsNoTracking();
+        IQueryable<Client> q = _db.Clients.AsNoTracking().Where(c => !c.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -70,46 +80,54 @@ public class ClientsController : ControllerBase
         return Ok(items);
     }
 
-    // GET /api/clients/{id}
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ClientDto>> GetById(int id)
     {
-        var e = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        var e = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
         return Ok(ToDto(e));
     }
 
-    // PUT /api/clients/{id}
     [HttpPut("{id:int}")]
     public async Task<ActionResult<ClientDto>> Update(int id, [FromBody] ClientUpdateDto dto)
     {
-        var e = await _db.Clients.FirstOrDefaultAsync(x => x.Id == id);
+        var e = await _db.Clients.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
 
-        e.Name = dto.Name.Trim();
-        e.Code = dto.Code?.Trim();
-        e.Phone = dto.Phone?.Trim();
-        e.Email = dto.Email?.Trim();
-        e.Address = dto.Address?.Trim();
+        var name = dto.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Client name is required." });
+
+        var code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
+
+        if (code != null)
+        {
+            var exists = await _db.Clients.AnyAsync(c => c.Code == code && c.Id != id && !c.IsDeleted);
+            if (exists)
+                return Conflict(new { message = $"A client with code '{code}' already exists." });
+        }
+
+        e.Name = name;
+        e.Code = code;
+        e.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
+        e.Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
+        e.Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim();
         e.IsActive = dto.IsActive;
 
         await _db.SaveChangesAsync();
         return Ok(ToDto(e));
     }
 
-    // DELETE /api/clients/{id}
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpPatch("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
-        var e = await _db.Clients.FirstOrDefaultAsync(x => x.Id == id);
+        var e = await _db.Clients.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (e is null) return NotFound();
-
-        _db.Clients.Remove(e);
+        e.IsActive = isActive;
         await _db.SaveChangesAsync();
         return NoContent();
     }
 
-    // --- mapping helper ---
     private static ClientDto ToDto(Client c) =>
         new ClientDto(c.Id, c.Name, c.Code, c.Phone, c.Email, c.Address, c.IsActive);
 }

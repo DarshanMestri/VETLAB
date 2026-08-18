@@ -220,37 +220,6 @@ public class PackageItemUpdateValidator : AbstractValidator<PackageItemUpdateDto
 }
 
 // ---------- Rates ----------
-public class RateCreateValidator : AbstractValidator<RateCreateDto>
-{
-    public RateCreateValidator()
-    {
-        RuleFor(x => x.ItemId).GreaterThan(0);
-        RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.Currency).NotEmpty().MaximumLength(10);
-    }
-}
-public class RateUpdateValidator : AbstractValidator<RateUpdateDto>
-{
-    public RateUpdateValidator()
-    {
-        RuleFor(x => x.ItemId).GreaterThan(0);
-        RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.Currency).NotEmpty().MaximumLength(10);
-        // ClientId may be null (global rate)
-    }
-}
-
-//Client Update 
-public class ClientsCreateValidator : AbstractValidator<ClientCreateDto>
-{
-    public ClientsCreateValidator()
-    {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Code).MaximumLength(30).When(x => !string.IsNullOrWhiteSpace(x.Code));
-        RuleFor(x => x.Email).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email));
-    }
-}
-
 //Client Rate 
 
 public class ClientRateCreateValidator : AbstractValidator<ClientRateCreateDto>

@@ -119,12 +119,12 @@ public class UnitsController(VetLimsDbContext db) : ControllerBase
         return new UnitDto(e.Id, e.Name, e.Symbol, e.IsActive);
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpPatch("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
         var e = await db.Units.FindAsync(id);
         if (e is null) return NotFound();
-        db.Units.Remove(e);
+        e.IsActive = isActive;
         await db.SaveChangesAsync();
         return NoContent();
     }

@@ -186,8 +186,8 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
             clinicCount));
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpPatch("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
         var organizationId = await ResolveCurrentOrganizationIdAsync();
         if (!organizationId.HasValue)
@@ -197,14 +197,8 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
         if (item is null)
             return NotFound();
 
-        var activeClinicCount = await db.Clinics.CountAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.LaboratoryGroupId == id && x.IsActive);
-        if (activeClinicCount > 0)
-            return Conflict("Cannot delete a laboratory group with active clinics assigned. Reassign or unassign active clinics first.");
-
-        item.IsDeleted = true;
-        item.DeletedDate = DateTime.UtcNow;
+        item.IsActive = isActive;
         await db.SaveChangesAsync();
-
         return NoContent();
     }
 

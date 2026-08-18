@@ -1121,7 +1121,8 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Phone")
                         .HasColumnType("text");
@@ -1131,7 +1132,8 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code");
+                    b.HasIndex("Code")
+                        .IsUnique();
 
                     b.HasIndex("Name");
 
@@ -1196,6 +1198,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("VatRate")
+                        .HasColumnType("numeric(18,2)");
 
                     b.HasKey("Id");
 
@@ -3204,6 +3209,10 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int?>("OwnerId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("OwnerMobile")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("OwnerName")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -3218,6 +3227,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("numeric");
+
+                    b.Property<decimal>("TotalVat")
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3354,6 +3366,11 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("numeric");
 
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("RegistrationId")
                         .HasColumnType("integer");
 
@@ -3384,6 +3401,12 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasColumnType("numeric(18,2)");
 
                     b.HasKey("Id");
 

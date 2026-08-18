@@ -24,15 +24,18 @@ public class ResultsController : ControllerBase
         _db = db; _rr = rr; _reports = reports; _currentUserService = currentUserService;
     }
 
-    /// Worklist: filter by test, department, barcode, status
-    /// GET /api/results/worklist?departmentId=&testId=&barcode=&status=Pending|InProgress
+    /// Worklist: filter by test, department, barcode, status, owner
+    /// GET /api/results/worklist?departmentId=&testId=&barcode=&status=Pending|InProgress&owner=&ownerId=
     [HttpGet("worklist")]
     public async Task<ActionResult<IEnumerable<ResultWorkItemDto>>> Worklist(
-        [FromQuery] int? departmentId, [FromQuery] int? testId, [FromQuery] string? barcode, [FromQuery] string? status)
+        [FromQuery] int? departmentId, [FromQuery] int? testId, [FromQuery] string? barcode,
+        [FromQuery] string? status, [FromQuery] string? owner, [FromQuery] int? ownerId)
     {
         var q = _db.RegistrationItems
             .AsNoTracking()
             .Include(ri => ri.Registration)
+            .ThenInclude(r => r.Animals)
+            .ThenInclude(a => a.Species)
             .Include(ri => ri.Species)
             .Where(ri => ri.ItemType == RegItemType.Test); // result entry per Test items
 
@@ -40,6 +43,18 @@ public class ResultsController : ControllerBase
         {
             var b = barcode.Trim();
             q = q.Where(ri => ri.ItemBarcode == b || ri.Registration.Barcode == b);
+        }
+
+        if (ownerId.HasValue)
+            q = q.Where(ri => ri.Registration.OwnerId == ownerId.Value);
+
+        if (!string.IsNullOrWhiteSpace(owner))
+        {
+            var s = $"%{owner.Trim()}%";
+            q = q.Where(ri =>
+                EF.Functions.ILike(ri.Registration.OwnerName, s) ||
+                (ri.Registration.OwnerMobile != null && EF.Functions.ILike(ri.Registration.OwnerMobile, s)) ||
+                (ri.Registration.Owner != null && ri.Registration.Owner.Mobile != null && EF.Functions.ILike(ri.Registration.Owner.Mobile, s)));
         }
 
         if (testId.HasValue)
@@ -68,24 +83,48 @@ public class ResultsController : ControllerBase
             q = q.Where(ri => ri.Status == RegItemStatus.Pending || ri.Status == RegItemStatus.InProgress);
         }
 
-        var list = await q
+        var rows = await q
             .OrderBy(ri => ri.RegistrationId).ThenBy(ri => ri.ItemId)
-            .Select(ri => new ResultWorkItemDto(
+            .Select(ri => new
+            {
                 ri.Id,
                 ri.RegistrationId,
                 ri.Registration.OwnerName,
+                ri.Registration.OwnerMobile,
                 ri.ItemBarcode,
-                _db.Tests.Where(t => t.Id == ri.ItemId).Select(t => t.Code).FirstOrDefault()!,
-                _db.Tests.Where(t => t.Id == ri.ItemId).Select(t => t.Name).FirstOrDefault()!,
+                TestCode = _db.Tests.Where(t => t.Id == ri.ItemId).Select(t => t.Code).FirstOrDefault()!,
+                TestName = _db.Tests.Where(t => t.Id == ri.ItemId).Select(t => t.Name).FirstOrDefault()!,
                 ri.SpeciesId,
-                ri.Species != null ? ri.Species.Name : null,
-                ri.Status.ToString(),
+                SpeciesName = ri.Species != null ? ri.Species.Name : null,
+                ri.Status,
                 ri.SampleTypeId,
-                ri.SampleStatus.ToString(),
-                _db.Results.Any(r => r.RegistrationItemId == ri.Id && r.TechnicianVerifiedAt != null),
-                _db.Results.Any(r => r.RegistrationItemId == ri.Id && r.PathologistAuthenticatedAt != null)
-            ))
+                ri.SampleStatus,
+                TechnicianVerified = _db.Results.Any(r => r.RegistrationItemId == ri.Id && r.TechnicianVerifiedAt != null),
+                PathologistAuthenticated = _db.Results.Any(r => r.RegistrationItemId == ri.Id && r.PathologistAuthenticatedAt != null),
+                AnimalNames = ri.Registration.Animals.Select(a => a.AnimalName).ToList(),
+                AnimalSpecies = ri.Registration.Animals.Select(a => a.Species.Name).ToList(),
+                AnimalCount = ri.Registration.Animals.Count
+            })
             .ToListAsync();
+
+        var list = rows.Select(r => new ResultWorkItemDto(
+            r.Id,
+            r.RegistrationId,
+            r.OwnerName,
+            r.ItemBarcode,
+            r.TestCode,
+            r.TestName,
+            r.SpeciesId,
+            r.SpeciesName,
+            r.Status.ToString(),
+            r.SampleTypeId,
+            r.SampleStatus.ToString(),
+            r.TechnicianVerified,
+            r.PathologistAuthenticated,
+            string.Join(", ", r.AnimalNames.Zip(r.AnimalSpecies, (n, s) => $"{n} ({s})")),
+            r.AnimalCount,
+            r.OwnerMobile
+        ));
 
         return Ok(list);
     }
@@ -160,7 +199,10 @@ public class ResultsController : ControllerBase
             result.PathologistAuthenticatedAt,
             result.DigitalSignature,
             result.VerificationRemarks,
-            values));
+            values,
+            item.Registration.OwnerName,
+            string.Join(", ", item.Registration.Animals.Select(a => a.AnimalName)),
+            item.Registration.Animals.Count));
     }
 
     [HttpGet("{registrationItemId:int}/report")]

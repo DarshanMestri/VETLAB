@@ -159,7 +159,9 @@ const definitions: MasterDefinition[] = [
                 <button class="btn btn-sm btn-outline-primary me-1" (click)="openEdit(row)">
                   Edit
                 </button>
-                <button class="btn btn-sm btn-outline-danger" (click)="remove(row)">Delete</button>
+                <button class="btn btn-sm btn-outline-secondary" (click)="toggleStatus(row)">
+                  {{ row.isActive ? 'Deactivate' : 'Activate' }}
+                </button>
               </td>
             </tr>
           </tbody>
@@ -431,12 +433,15 @@ export class MasterListComponent implements OnInit {
     });
   }
 
-  remove(row: any): void {
-    if (!confirm(`Delete ${row.name}? This will hide it from master lists.`)) return;
+  toggleStatus(row: any): void {
+    const newVal = !row.isActive;
     this.http
-      .delete(`/api/mastercatalog/${this.selectedType()}/${row.id}`)
+      .patch(`/api/mastercatalog/${this.selectedType()}/${row.id}/status`, newVal)
       .subscribe({
-        next: () => this.load(),
+        next: () => {
+          row.isActive = newVal;
+          this.load();
+        },
         error: (err) => this.error.set(this.errorMessage(err)),
       });
   }

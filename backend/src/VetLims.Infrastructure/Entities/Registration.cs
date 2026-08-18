@@ -1,7 +1,7 @@
 namespace VetLims.Infrastructure.Entities;
 
 public enum PaymentMethod { Cash = 1, Card = 2, Cheque = 3 }
-public enum RegItemType { Test = 1, Profile = 2, Package = 3 }
+public enum RegItemType { Test = 1, Profile = 2, Package = 3, Medicine = 4 }
 public enum RegItemStatus { Pending = 1, InProgress = 2, Completed = 3, Canceled = 4 }
 public enum SampleWorkflowStatus { NotCollected = 1, Collected = 2, Received = 3, Processing = 4, Processed = 5 }
 
@@ -26,6 +26,9 @@ public class Registration : BaseEntity
     // Owner single name (free text, any language)
     public string OwnerName { get; set; } = default!;
 
+    // Mobile captured at registration time (owner master mobile if existing owner)
+    public string? OwnerMobile { get; set; }
+
     // Generated barcode for the registration header
     public string Barcode { get; set; } = default!;
 
@@ -36,7 +39,8 @@ public class Registration : BaseEntity
     public ICollection<RegistrationItem> Items { get; set; } = new List<RegistrationItem>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
-    public decimal TotalAmount { get; set; }     // sum of item prices
+    public decimal TotalAmount { get; set; }     // sum of item prices (gross, includes VAT)
+    public decimal TotalVat { get; set; }        // sum of item VAT amounts
     public decimal PaidAmount { get; set; }      // sum of payments
     public decimal Balance => TotalAmount - PaidAmount;
 }
@@ -74,7 +78,10 @@ public class RegistrationItem : BaseEntity
     public int? SampleTypeId { get; set; }
     public SampleType? SampleType { get; set; }
 
-    public decimal Price { get; set; }              // resolved from Rate Master at order time
+    public decimal Price { get; set; }              // resolved from Rate Master at order time (net per unit, excludes VAT)
+    public decimal VatRate { get; set; }            // VAT % applied at order time
+    public decimal VatAmount { get; set; }          // line VAT = round(Price * VatRate / 100, 2) * Quantity
+    public int Quantity { get; set; } = 1;          // how many animals this order applies to (species count or all animals)
     public RegItemStatus Status { get; set; } = RegItemStatus.Pending;
     public SampleWorkflowStatus SampleStatus { get; set; } = SampleWorkflowStatus.NotCollected;
 

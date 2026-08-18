@@ -34,7 +34,7 @@ export class OrganizationsService {
     return this.http.put(`${this.base}/${id}`, payload);
   }
 
-  delete(id: number) {
-    return this.http.delete(`${this.base}/${id}`);
+  toggleStatus(id: number, isActive: boolean) {
+    return this.http.patch(`${this.base}/${id}/status`, isActive);
   }
 }

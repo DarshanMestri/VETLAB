@@ -48,7 +48,9 @@ import { DepartmentApi, Department } from './department.api';
               <button class="btn btn-sm btn-outline-secondary me-1" (click)="openEdit(d)">
                 Edit
               </button>
-              <button class="btn btn-sm btn-outline-danger" (click)="del(d)">Delete</button>
+              <button class="btn btn-sm btn-outline-warning" (click)="toggle(d)">
+                {{ d.isActive ? 'Deactivate' : 'Activate' }}
+              </button>
             </td>
           </tr>
         </tbody>
@@ -185,8 +187,14 @@ export class DepartmentListComponent {
     });
   }
 
-  del(d: Department) {
-    if (!confirm(`Delete "${d.name}"?`)) return;
-    this.api.delete(d.id).subscribe({ next: (_) => this.reload() });
+  toggle(d: Department) {
+    const newVal = !d.isActive;
+    this.api.toggleStatus(d.id, newVal).subscribe({
+      next: () => {
+        d.isActive = newVal;
+        this.reload();
+      },
+      error: (err) => this.error.set(err.error ?? 'Toggle failed'),
+    });
   }
 }

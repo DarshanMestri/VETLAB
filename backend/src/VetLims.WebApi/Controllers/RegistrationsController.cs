@@ -62,8 +62,10 @@ public class RegistrationsController : ControllerBase
                 x.ClinicalNotes,
                 x.CreatedAt,
                 x.TotalAmount,
+                x.TotalVat,
                 x.PaidAmount,
-                x.Balance))
+                x.Balance,
+                x.OwnerMobile))
             .ToListAsync();
 
         return Ok(new PagedResult<RegistrationDto> { Page = page, PageSize = size, Total = total, Items = items });
@@ -110,11 +112,14 @@ public class RegistrationsController : ControllerBase
         if (string.IsNullOrWhiteSpace(ownerName))
             return BadRequest("Owner name is required.");
 
+        var ownerMobile = owner?.Mobile ?? dto.OwnerMobile?.Trim();
+
         var reg = new Registration
         {
            ClinicId = branch.ClinicId,
            BranchId = branch.Id,
            OwnerName = ownerName,
+           OwnerMobile = ownerMobile,
            ClientId = dto.ClientId,
            OwnerId = dto.OwnerId,
            DoctorId = dto.DoctorId,
@@ -145,14 +150,17 @@ public class RegistrationsController : ControllerBase
                 AnimalId = a.AnimalId,
                 SpeciesId = speciesId,
                 AnimalName = animalName,
-                AgeInDays = animal?.DateOfBirth.HasValue == true
+                AgeInDays = a.AgeInDays ?? (animal?.DateOfBirth.HasValue == true
                     ? Math.Max((DateTime.UtcNow.Date - animal.DateOfBirth.Value.ToDateTime(TimeOnly.MinValue).Date).Days, 0)
-                    : null
+                    : null)
             });
         }
 
         // items with pricing + per-item barcode
-        decimal total = 0;
+        // Quantity = number of animals this order applies to:
+        //   item.SpeciesId set   -> count of animals with that species
+        //   item.SpeciesId null   -> all animals on the registration
+        decimal totalNet = 0, totalVat = 0;
         foreach (var it in dto.Items)
         {
             if (it.SampleTypeId.HasValue)
@@ -168,7 +176,12 @@ public class RegistrationsController : ControllerBase
                     return BadRequest(error ?? "The selected Test is not enabled for this Branch.");
             }
 
-            var price = await _pricing.ResolvePriceAsync(dto.ClientId, it.ItemType, it.ItemId);
+            var quantity = it.SpeciesId.HasValue
+                ? reg.Animals.Count(a => a.SpeciesId == it.SpeciesId.Value)
+                : reg.Animals.Count;
+
+            var (price, vatRate) = await _pricing.ResolvePricingAsync(dto.ClientId, it.ItemType, it.ItemId);
+            var unitVat = price > 0 ? decimal.Round(price * vatRate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
             var item = new RegistrationItem
             {
                 ClinicId = branch.ClinicId,
@@ -178,12 +191,17 @@ public class RegistrationsController : ControllerBase
                 SpeciesId = it.SpeciesId,
                 SampleTypeId = it.SampleTypeId,
                 Price = price,
+                Quantity = quantity,
+                VatRate = vatRate,
+                VatAmount = unitVat * quantity,
                 ItemBarcode = await _barcodes.NextAsync("IT")
             };
             reg.Items.Add(item);
-            total += price;
+            totalNet += price * quantity;
+            totalVat += unitVat * quantity;
         }
-        reg.TotalAmount = total;
+        reg.TotalAmount = decimal.Round(totalNet + totalVat, 2, MidpointRounding.AwayFromZero);
+        reg.TotalVat = decimal.Round(totalVat, 2, MidpointRounding.AwayFromZero);
 
         // optional initial payment
         if (dto.InitialPaymentAmount.HasValue && dto.InitialPaymentAmount.Value > 0 && dto.InitialPaymentMethod.HasValue)
@@ -255,8 +273,22 @@ public class RegistrationsController : ControllerBase
         if (!organizationId.HasValue)
             return Forbid();
 
+        // Only offer tests that are enabled for the logged-in branch (WYSIWYG with create-time validation)
+        var branchId = _currentUserService.BranchId;
+        List<int> enabledTestIds = new();
+        if (branchId.HasValue)
+        {
+            enabledTestIds = await (from bt in _db.BranchTests.AsNoTracking()
+                                    join bd in _db.BranchDepartments.AsNoTracking()
+                                        on new { bt.BranchId, bt.Test.DepartmentId } equals new { bd.BranchId, bd.DepartmentId }
+                                    where bt.BranchId == branchId.Value && !bt.IsDeleted && bt.IsActive
+                                          && !bd.IsDeleted && bd.IsActive
+                                    select bt.TestId).ToListAsync();
+        }
+
         var tests = await _db.Tests.AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive)
+            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive
+                && (branchId.HasValue ? enabledTestIds.Contains(x.Id) : true))
             .OrderBy(x => x.Name)
             .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Test, x.DepartmentId, SampleTypeId = (int?)null })
             .ToListAsync();
@@ -283,6 +315,18 @@ public class RegistrationsController : ControllerBase
             sampleTypes,
             orderables = tests.Concat<object>(profiles).Concat(packages)
         });
+    }
+
+    // Client price list for live totals on the registration form (any authenticated user)
+    [HttpGet("prices")]
+    public async Task<ActionResult<object>> GetPrices([FromQuery] int clientId)
+    {
+        if (clientId <= 0) return BadRequest("clientId is required.");
+        var rates = await _db.ClientRates.AsNoTracking()
+            .Where(r => r.ClientId == clientId)
+            .Select(r => new { r.ItemType, r.ItemId, r.Rate, r.VatRate })
+            .ToListAsync();
+        return Ok(rates);
     }
 
     // Add a payment later
@@ -314,6 +358,9 @@ public class RegistrationsController : ControllerBase
         var item = await _db.RegistrationItems.FirstOrDefaultAsync(x => x.Id == registrationItemId);
         if (item is null) return NotFound();
 
+        if (item.SampleStatus >= SampleWorkflowStatus.Collected)
+            return Conflict("Sample is already collected.");
+
         item.SampleStatus = SampleWorkflowStatus.Collected;
         item.SampleCollectedAt = DateTime.UtcNow;
         item.SampleNotes = dto.Notes?.Trim();
@@ -329,6 +376,8 @@ public class RegistrationsController : ControllerBase
 
         if (item.SampleStatus < SampleWorkflowStatus.Collected)
             return BadRequest("Sample must be collected before receiving.");
+        if (item.SampleStatus >= SampleWorkflowStatus.Received)
+            return Conflict("Sample is already received.");
 
         item.SampleStatus = SampleWorkflowStatus.Received;
         item.SampleReceivedAt = DateTime.UtcNow;
@@ -345,6 +394,8 @@ public class RegistrationsController : ControllerBase
 
         if (item.SampleStatus < SampleWorkflowStatus.Received)
             return BadRequest("Sample must be received before processing.");
+        if (item.SampleStatus >= SampleWorkflowStatus.Processed)
+            return Conflict("Sample is already processed.");
 
         item.SampleStatus = SampleWorkflowStatus.Processed;
         item.SampleProcessedAt = DateTime.UtcNow;
@@ -385,9 +436,10 @@ public class RegistrationsController : ControllerBase
                 r.ClinicalNotes,
                 r.CreatedAt,
                 r.TotalAmount,
+                r.TotalVat,
                 r.PaidAmount,
                 r.Balance,
-                r.Animals.Select(a => new RegistrationAnimalView(a.Id, a.SpeciesId, a.AnimalName, a.AnimalId)).ToList(),
+                r.Animals.Select(a => new RegistrationAnimalView(a.Id, a.SpeciesId, a.AnimalName, a.AnimalId, a.AgeInDays)).ToList(),
                 r.Items.Select(i => new RegistrationItemView(
                     i.Id,
                     i.ItemType,
@@ -395,15 +447,18 @@ public class RegistrationsController : ControllerBase
                     i.SpeciesId,
                     i.SampleTypeId,
                     i.Price,
+                    i.VatRate,
+                    i.VatAmount,
                     i.ItemBarcode,
                     i.Status.ToString(),
                     i.SampleStatus.ToString(),
                     i.SampleCollectedAt,
                     i.SampleReceivedAt,
                     i.SampleProcessedAt,
-                    i.SampleNotes)).ToList(),
-                r.Payments.Select(p => new PaymentView(p.Id, p.Method, p.Amount, p.PaidAt, p.Reference, p.Currency)).ToList()
-            ))
+                    i.SampleNotes,
+                    i.Quantity)).ToList(),
+                r.Payments.Select(p => new PaymentView(p.Id, p.Method, p.Amount, p.PaidAt, p.Reference, p.Currency)).ToList(),
+                r.OwnerMobile))
             .FirstOrDefaultAsync();
     }
 }

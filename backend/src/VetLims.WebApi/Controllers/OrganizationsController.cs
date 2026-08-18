@@ -98,19 +98,12 @@ public class OrganizationsController(VetLimsDbContext db) : ControllerBase
         return Ok(new OrganizationDto(item.Id, item.Code, item.Name, item.LegalName, item.Email, item.Phone, item.Address, item.IsActive));
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpPatch("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
-        // Only allow delete on non-deleted organizations
         var item = await db.Organizations.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (item is null) return NotFound();
-
-        var clinicCount = await db.Clinics.CountAsync(x => x.OrganizationId == id);
-        if (clinicCount > 0)
-            return Conflict("Cannot delete organization with linked laboratories.");
-
-        // Preserve soft-delete behavior via SaveChangesAsync override
-        db.Organizations.Remove(item);
+        item.IsActive = isActive;
         await db.SaveChangesAsync();
         return NoContent();
     }

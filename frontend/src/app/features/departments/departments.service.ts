@@ -22,7 +22,4 @@ export class DepartmentsService {
   update(id: number, data: { name: string; isActive: boolean }) {
     return this.http.put(`${this.base}/${id}`, data);
   }
-  remove(id: number) {
-    return this.http.delete(`${this.base}/${id}`);
-  }
 }

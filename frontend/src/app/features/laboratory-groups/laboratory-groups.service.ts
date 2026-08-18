@@ -73,8 +73,8 @@ export class LaboratoryGroupsService {
     return this.http.put<LaboratoryGroupListItem>(`${this.base}/${id}`, payload);
   }
 
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/${id}`);
+  toggleStatus(id: number, isActive: boolean): Observable<void> {
+    return this.http.patch<void>(`${this.base}/${id}/status`, isActive);
   }
 
   getClinics(laboratoryGroupId: number): Observable<LaboratoryGroupClinicItem[]> {

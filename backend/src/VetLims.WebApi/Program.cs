@@ -5,9 +5,12 @@ using Serilog;
 using VetLims.Infrastructure;
 using VetLims.Infrastructure.Identity;
 using VetLims.Infrastructure.Seed;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using VetLims.WebApi.Common;
 using VetLims.WebApi.Reporting;
 using VetLims.WebApi.Services;
+using VetLims.WebApi.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,7 +69,9 @@ builder.Services.AddCors(o => o.AddPolicy("Dev", p =>
      .AllowCredentials()
 ));
 
-builder.Services.AddControllers();           // <-- must be BEFORE Build
+builder.Services.AddControllers();
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<ClientCreateValidator>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

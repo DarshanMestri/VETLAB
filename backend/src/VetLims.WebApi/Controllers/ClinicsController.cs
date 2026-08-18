@@ -32,7 +32,7 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         var items = await q.OrderBy(x => x.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new ClinicDto(x.Id, x.OrganizationId!.Value, x.Code, x.Name, x.Logo, x.Address, x.Phone, x.Email, x.Gst, x.RegistrationNumber, x.WhatsAppNumber, x.ReportHeader, x.ReportFooter, x.DigitalSignature, x.IsActive))
+            .Select(x => new ClinicDto(x.Id, x.OrganizationId!.Value, x.LaboratoryGroupId, x.Code, x.Name, x.Logo, x.Address, x.Phone, x.Email, x.Gst, x.RegistrationNumber, x.WhatsAppNumber, x.ReportHeader, x.ReportFooter, x.DigitalSignature, x.IsActive))
             .ToListAsync();
 
         return Ok(new { total, page, pageSize, items });
@@ -48,7 +48,7 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         var item = await db.Clinics.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
-        return Ok(new ClinicDto(item.Id, item.OrganizationId!.Value, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
+        return Ok(new ClinicDto(item.Id, item.OrganizationId!.Value, item.LaboratoryGroupId, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
     }
 
     [HttpPost]
@@ -64,9 +64,13 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         if (await db.Clinics.AnyAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
             return Conflict("Clinic code already exists in this organization.");
 
+        if (dto.LaboratoryGroupId.HasValue && !await IsValidLaboratoryGroupAsync(dto.LaboratoryGroupId.Value, organizationId.Value))
+            return BadRequest("Selected laboratory group is invalid for this organization.");
+
         var item = new Clinic
         {
             OrganizationId = organizationId.Value,
+            LaboratoryGroupId = dto.LaboratoryGroupId,
             Code = dto.Code.Trim(),
             Name = dto.Name.Trim(),
             Logo = dto.Logo?.Trim(),
@@ -85,7 +89,7 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         db.Clinics.Add(item);
         await db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(Get), new { id = item.Id }, new ClinicDto(item.Id, item.OrganizationId!.Value, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
+        return CreatedAtAction(nameof(Get), new { id = item.Id }, new ClinicDto(item.Id, item.OrganizationId!.Value, item.LaboratoryGroupId, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
     }
 
     [HttpPut("{id:int}")]
@@ -104,6 +108,10 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         if (await db.Clinics.AnyAsync(x => x.Id != id && x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
             return Conflict("Clinic code already exists in this organization.");
 
+        if (dto.LaboratoryGroupId.HasValue && !await IsValidLaboratoryGroupAsync(dto.LaboratoryGroupId.Value, organizationId.Value))
+            return BadRequest("Selected laboratory group is invalid for this organization.");
+
+        item.LaboratoryGroupId = dto.LaboratoryGroupId;
         item.Code = dto.Code.Trim();
         item.Name = dto.Name.Trim();
         item.Logo = dto.Logo?.Trim();
@@ -119,7 +127,7 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         item.IsActive = dto.IsActive;
 
         await db.SaveChangesAsync();
-        return Ok(new ClinicDto(item.Id, item.OrganizationId!.Value, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
+        return Ok(new ClinicDto(item.Id, item.OrganizationId!.Value, item.LaboratoryGroupId, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
     }
 
     [HttpPatch("{id:int}/status")]
@@ -136,21 +144,6 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
-        if (!organizationId.HasValue)
-            return Forbid();
-
-        var item = await db.Clinics.FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
-        if (item is null) return NotFound();
-
-        db.Clinics.Remove(item);
-        await db.SaveChangesAsync();
-        return NoContent();
-    }
-
     private Task<int?> ResolveCurrentOrganizationIdAsync()
     {
         var orgId = currentUserService.OrganizationId;
@@ -161,5 +154,11 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
             .Where(x => x.Id == orgId.Value && !x.IsDeleted && x.IsActive)
             .Select(x => (int?)x.Id)
             .FirstOrDefaultAsync();
+    }
+
+    private Task<bool> IsValidLaboratoryGroupAsync(int groupId, int organizationId)
+    {
+        return db.LaboratoryGroups.AsNoTracking()
+            .AnyAsync(x => x.Id == groupId && x.OrganizationId == organizationId && !x.IsDeleted && x.IsActive);
     }
 }

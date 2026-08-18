@@ -28,8 +28,4 @@ export class UnitsService {
   update(id: number, data: { symbol: string; name?: string | null; isActive: boolean }) {
     return this.http.put(`${this.base}/${id}`, data);
   }
-
-  remove(id: number) {
-    return this.http.delete(`${this.base}/${id}`);
-  }
 }

@@ -29,7 +29,7 @@ public class SpeciesController(VetLimsDbContext db) : ControllerBase
             .OrderBy(x => x.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new SpeciesDto(x.Id, x.Code, x.Name))
+            .Select(x => new SpeciesDto(x.Id, x.Code, x.Name, x.IsActive))
             .ToListAsync();
 
         return Ok(new { total, items, page, pageSize });
@@ -40,7 +40,7 @@ public class SpeciesController(VetLimsDbContext db) : ControllerBase
     {
         var e = await db.Species.FindAsync(id);
         if (e is null) return NotFound();
-        return new SpeciesDto(e.Id, e.Code, e.Name);
+        return new SpeciesDto(e.Id, e.Code, e.Name, e.IsActive);
     }
 
     [HttpPost]
@@ -53,7 +53,7 @@ public class SpeciesController(VetLimsDbContext db) : ControllerBase
         var e = new Species { Code = dto.Code.Trim(), Name = dto.Name.Trim() };
         db.Species.Add(e);
         await db.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetOne), new { id = e.Id }, new SpeciesDto(e.Id, e.Code, e.Name));
+        return CreatedAtAction(nameof(GetOne), new { id = e.Id }, new SpeciesDto(e.Id, e.Code, e.Name, e.IsActive));
     }
 
     [HttpPut("{id:int}")]
@@ -70,15 +70,15 @@ public class SpeciesController(VetLimsDbContext db) : ControllerBase
         e.Name = dto.Name.Trim();
         await db.SaveChangesAsync();
 
-        return new SpeciesDto(e.Id, e.Code, e.Name);
+        return new SpeciesDto(e.Id, e.Code, e.Name, e.IsActive);
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpPatch("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
         var e = await db.Species.FindAsync(id);
         if (e is null) return NotFound();
-        db.Species.Remove(e);
+        e.IsActive = isActive;
         await db.SaveChangesAsync();
         return NoContent();
     }

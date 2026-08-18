@@ -56,8 +56,8 @@ export class TestApi {
   update(id: number, payload: Omit<Test, 'id'>) {
     return this.http.put<Test>(`${API}/${id}`, payload);
   }
-  delete(id: number) {
-    return this.http.delete(`${API}/${id}`);
+  toggleStatus(id: number, isActive: boolean) {
+    return this.http.patch(`${API}/${id}/status`, isActive);
   }
 
   // parameters

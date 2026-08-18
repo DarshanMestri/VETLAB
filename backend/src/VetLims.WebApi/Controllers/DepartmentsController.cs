@@ -124,17 +124,4 @@ public class DepartmentsController(VetLimsDbContext db, ICurrentUserService curr
         await db.SaveChangesAsync();
         return NoContent();
     }
-
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var e = await db.Departments.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
-        if (e is null) return NotFound();
-        e.IsDeleted = true;
-        e.DeletedDate = DateTime.UtcNow;
-        e.DeletedBy = currentUserService.UserName ?? "system";
-        e.IsActive = false;
-        await db.SaveChangesAsync();
-        return NoContent();
-    }
 }

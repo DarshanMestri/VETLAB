@@ -16,15 +16,18 @@ public class UsersController : ControllerBase
     private readonly UserManager<AppUser> _users;
     private readonly RoleManager<IdentityRole<int>> _roles;
     private readonly VetLimsDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
     public UsersController(
         UserManager<AppUser> users,
         RoleManager<IdentityRole<int>> roles,
-        VetLimsDbContext db)
+        VetLimsDbContext db,
+        ICurrentUserService currentUser)
     {
         _users = users;
         _roles = roles;
         _db = db;
+        _currentUser = currentUser;
     }
 
     public record RoleRequest(string RoleName);
@@ -47,6 +50,17 @@ public class UsersController : ControllerBase
         int? BranchId,
         bool IsActive,
         string? NewPassword = null);
+
+    public record LoginHistoryItem(
+        int Id,
+        int UserId,
+        string? UserName,
+        string? DisplayName,
+        bool Success,
+        string? IpAddress,
+        string? UserAgent,
+        string? FailureReason,
+        DateTime CreatedAt);
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> List()
@@ -247,5 +261,132 @@ public class UsersController : ControllerBase
         var res = await _users.UpdateAsync(user);
         if (!res.Succeeded) return BadRequest(string.Join("; ", res.Errors.Select(e => e.Description)));
         return Ok();
+    }
+
+    [HttpGet("hierarchy")]
+    public async Task<ActionResult<object>> Hierarchy()
+    {
+        var organizationId = await ResolveOrganizationIdAsync();
+        if (!organizationId.HasValue) return Forbid();
+
+        var org = await _db.Organizations.AsNoTracking()
+            .Where(x => x.Id == organizationId.Value && !x.IsDeleted && x.IsActive)
+            .Select(x => new { x.Id, x.Code, x.Name })
+            .FirstOrDefaultAsync();
+        if (org is null) return NotFound("Organization not found.");
+
+        var clinics = await _db.Clinics.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+        var clinicIds = clinics.Select(c => c.Id).ToArray();
+
+        var branches = await _db.Branches.AsNoTracking()
+            .Where(x => clinicIds.Contains(x.ClinicId) && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+
+        var users = await _users.Users.AsNoTracking().OrderBy(u => u.UserName).ToListAsync();
+        var roleMap = await BuildRoleMapAsync();
+
+        var lastLogins = await _db.LoginHistories.AsNoTracking()
+            .Where(h => h.Success)
+            .GroupBy(h => h.UserId)
+            .Select(g => new { UserId = g.Key, At = g.Max(h => h.CreatedAt) })
+            .ToDictionaryAsync(x => x.UserId, x => x.At);
+
+        object UserNode(AppUser u) => new
+        {
+            u.Id,
+            u.UserName,
+            u.DisplayName,
+            u.Email,
+            u.IsActive,
+            u.ClinicId,
+            u.BranchId,
+            Roles = roleMap.TryGetValue(u.Id, out var r) ? r : new List<string>(),
+            LastLoginAt = lastLogins.TryGetValue(u.Id, out var at) ? at : (DateTime?)null
+        };
+
+        var labs = clinics.Select(c => new
+        {
+            c.Id,
+            c.Code,
+            c.Name,
+            c.IsActive,
+            Users = users.Where(u => u.ClinicId == c.Id && !u.BranchId.HasValue).Select(UserNode).ToList(),
+            Branches = branches.Where(b => b.ClinicId == c.Id).Select(b => new
+            {
+                b.Id,
+                b.Code,
+                b.Name,
+                b.IsActive,
+                Users = users.Where(u => u.BranchId == b.Id).Select(UserNode).ToList()
+            }).ToList()
+        }).ToList();
+
+        var unassigned = users
+            .Where(u => !u.ClinicId.HasValue || !clinicIds.Contains(u.ClinicId.Value))
+            .Select(UserNode)
+            .ToList();
+
+        return Ok(new { organization = org, labs, unassigned });
+    }
+
+    [HttpGet("login-history")]
+    public async Task<ActionResult<IEnumerable<LoginHistoryItem>>> LoginHistory(
+        [FromQuery] int limit = 100,
+        [FromQuery] bool? success = null)
+    {
+        var organizationId = await ResolveOrganizationIdAsync();
+        if (!organizationId.HasValue) return Forbid();
+
+        if (limit is < 1 or > 500) return BadRequest("Limit must be between 1 and 500.");
+
+        var q = _db.LoginHistories.AsNoTracking()
+            .Where(h => h.User != null && h.User.OrganizationId == organizationId.Value);
+
+        if (success.HasValue)
+            q = q.Where(h => h.Success == success.Value);
+
+        var items = await q
+            .OrderByDescending(h => h.CreatedAt)
+            .Take(limit)
+            .Select(h => new LoginHistoryItem(
+                h.Id,
+                h.UserId,
+                h.User!.UserName,
+                h.User.DisplayName,
+                h.Success,
+                h.IpAddress,
+                h.UserAgent,
+                h.FailureReason,
+                h.CreatedAt))
+            .ToListAsync();
+
+        return Ok(items);
+    }
+
+    private async Task<int?> ResolveOrganizationIdAsync()
+    {
+        var orgId = _currentUser.OrganizationId;
+        if (!orgId.HasValue) return null;
+
+        return await _db.Organizations.AsNoTracking()
+            .Where(x => x.Id == orgId.Value && !x.IsDeleted && x.IsActive)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<Dictionary<int, List<string>>> BuildRoleMapAsync()
+    {
+        var rows = await (from ur in _db.UserRoles.AsNoTracking()
+                          join r in _db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+                          select new { ur.UserId, RoleName = r.Name ?? string.Empty })
+            .ToListAsync();
+
+        return rows
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.RoleName).ToList());
     }
 }

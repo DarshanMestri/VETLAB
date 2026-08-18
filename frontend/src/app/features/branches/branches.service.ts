@@ -50,6 +50,15 @@ export interface BranchDepartmentAssignment {
   isActive: boolean;
 }
 
+export interface BranchTestAssignment {
+  id: number;
+  branchId: number;
+  testId: number;
+  testName: string;
+  testCode?: string | null;
+  isActive: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class BranchesService {
   private readonly base = '/api/branches';
@@ -86,10 +95,6 @@ export class BranchesService {
     return this.http.patch<void>(`${this.base}/${id}/status`, isActive);
   }
 
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/${id}`);
-  }
-
   getClinics(): Observable<ClinicOption[]> {
     return this.http
       .get<PagedClinicResponse>('/api/clinics')
@@ -124,5 +129,25 @@ export class BranchesService {
       `${this.base}/${branchId}/departments/${departmentId}/status`,
       isActive,
     );
+  }
+
+  getBranchTests(branchId: number): Observable<BranchTestAssignment[]> {
+    return this.http.get<BranchTestAssignment[]>(`${this.base}/${branchId}/tests`);
+  }
+
+  getAvailableTests(branchId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/${branchId}/tests/available`);
+  }
+
+  assignTest(branchId: number, testId: number): Observable<BranchTestAssignment> {
+    return this.http.post<BranchTestAssignment>(`${this.base}/${branchId}/tests/${testId}`, {});
+  }
+
+  removeTest(assignmentId: number): Observable<void> {
+    return this.http.delete<void>(`/api/branch-tests/${assignmentId}`);
+  }
+
+  toggleTestStatus(assignmentId: number, isActive: boolean): Observable<void> {
+    return this.http.patch<void>(`/api/branch-tests/${assignmentId}/status`, isActive);
   }
 }

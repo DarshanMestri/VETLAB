@@ -97,7 +97,9 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                 <div class="btn-group btn-group-sm" role="group">
                   <button class="btn btn-outline-info" (click)="openManage(row)">Manage Laboratories</button>
                   <button class="btn btn-outline-primary" (click)="openEdit(row)">Edit</button>
-                  <button class="btn btn-outline-danger" (click)="remove(row)">Delete</button>
+                  <button class="btn btn-outline-secondary" (click)="toggleStatus(row)">
+                    {{ row.isActive ? 'Deactivate' : 'Activate' }}
+                  </button>
                 </div>
               </td>
             </tr>
@@ -308,19 +310,11 @@ export class LaboratoryGroupsListComponent implements OnInit {
     });
   }
 
-  remove(row: LaboratoryGroupListItem): void {
-    if (!confirm(`Delete ${row.name}?`)) return;
+  toggleStatus(row: LaboratoryGroupListItem): void {
     this.error.set('');
-    this.svc.delete(row.id).subscribe({
-      next: () => {
-        if (this.manageGroup?.id === row.id) {
-          this.manageGroup = null;
-        }
-        this.load();
-      },
-      error: (err) => {
-        this.error.set(this.extractMessage(err));
-      },
+    this.svc.toggleStatus(row.id, !row.isActive).subscribe({
+      next: () => this.load(),
+      error: (err) => this.error.set(this.extractMessage(err)),
     });
   }
 

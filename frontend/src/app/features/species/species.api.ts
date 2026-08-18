@@ -9,6 +9,7 @@ export interface Species {
   id: number;
   code: string;
   name: string;
+  isActive: boolean;
 }
 export interface Paged<T> {
   total: number;
@@ -36,7 +37,7 @@ export class SpeciesApi {
   update(id: number, payload: { code: string; name: string }) {
     return this.http.put<Species>(`${API}/${id}`, payload);
   }
-  delete(id: number) {
-    return this.http.delete(`${API}/${id}`);
+  toggleStatus(id: number, isActive: boolean) {
+    return this.http.patch(`${API}/${id}/status`, isActive);
   }
 }

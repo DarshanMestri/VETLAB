@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -97,31 +99,37 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        PreparePersistence();
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        var fixups = PreparePersistence();
+        var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        ApplyAuditRecordIdFixups(fixups);
+        return result;
     }
 
     public override int SaveChanges()
     {
-        PreparePersistence();
-        return base.SaveChanges(acceptAllChangesOnSuccess: true);
+        var fixups = PreparePersistence();
+        var result = base.SaveChanges(acceptAllChangesOnSuccess: true);
+        ApplyAuditRecordIdFixups(fixups);
+        return result;
     }
 
     public override Task<int> SaveChangesAsync(
         bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
-        PreparePersistence();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        var fixups = PreparePersistence();
+        var result = base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        return FixupAfterSaveAsync(result, fixups, cancellationToken);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        PreparePersistence();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+        var fixups = PreparePersistence();
+        var result = base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+        return FixupAfterSaveAsync(result, fixups, cancellationToken);
     }
 
-    public Task<int> SaveChangesAsSystemAsync(
+    public async Task<int> SaveChangesAsSystemAsync(
         int organizationId,
         CancellationToken cancellationToken = default)
     {
@@ -132,11 +140,13 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
                 "System persistence requires a positive organization ID.");
         }
 
-        PreparePersistence(organizationId, isExplicitSystemExecution: true);
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+        var fixups = PreparePersistence(organizationId, isExplicitSystemExecution: true);
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+        await ApplyAuditRecordIdFixupsAsync(fixups, cancellationToken);
+        return result;
     }
 
-    private void PreparePersistence(
+    private List<PendingAuditRecordId> PreparePersistence(
         int? organizationIdOverride = null,
         bool isExplicitSystemExecution = false)
     {
@@ -160,6 +170,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             }
         }
 
+        var fixups = new List<PendingAuditRecordId>();
         foreach (var entry in entries)
         {
             if (entry.Entity is not BaseEntity baseEntity)
@@ -167,16 +178,19 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
                 continue;
             }
 
+            string action;
             switch (entry.State)
             {
                 case EntityState.Added:
                     baseEntity.CreatedDate = now;
                     baseEntity.CreatedBy ??= username;
+                    action = "Created";
                     break;
 
                 case EntityState.Modified:
                     baseEntity.ModifiedDate = now;
                     baseEntity.ModifiedBy = username;
+                    action = "Updated";
                     break;
 
                 case EntityState.Deleted:
@@ -186,9 +200,136 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
                     baseEntity.DeletedBy = username;
                     baseEntity.ModifiedDate = now;
                     baseEntity.ModifiedBy = username;
+                    action = "Deleted";
                     break;
+
+                default:
+                    continue;
+            }
+
+            var log = BuildAuditLog(entry, action, username, now);
+            AuditLogs.Add(log);
+
+            // Newly inserted rows receive their real key from the database during SaveChanges,
+            // so the audit RecordId is resolved afterwards.
+            if (action == "Created")
+            {
+                fixups.Add(new PendingAuditRecordId(log, baseEntity));
             }
         }
+
+        return fixups;
+    }
+
+    private void ApplyAuditRecordIdFixups(List<PendingAuditRecordId> fixups)
+    {
+        if (fixups.Count == 0) return;
+        foreach (var fixup in fixups)
+        {
+            fixup.Log.RecordId = fixup.Entity.Id.ToString();
+        }
+        SaveChanges();
+    }
+
+    private async Task ApplyAuditRecordIdFixupsAsync(List<PendingAuditRecordId> fixups, CancellationToken cancellationToken)
+    {
+        if (fixups.Count == 0) return;
+        foreach (var fixup in fixups)
+        {
+            fixup.Log.RecordId = fixup.Entity.Id.ToString();
+        }
+        await SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<int> FixupAfterSaveAsync(
+        Task<int> saveTask,
+        List<PendingAuditRecordId> fixups,
+        CancellationToken cancellationToken)
+    {
+        var result = await saveTask;
+        await ApplyAuditRecordIdFixupsAsync(fixups, cancellationToken);
+        return result;
+    }
+
+    private static AuditLog BuildAuditLog(EntityEntry entry, string action, string username, DateTime now)
+    {
+        return new AuditLog
+        {
+            TableName = entry.Metadata.GetTableName() ?? entry.Entity.GetType().Name,
+            RecordId = action == "Created" ? string.Empty : entry.Property(nameof(BaseEntity.Id)).CurrentValue?.ToString() ?? string.Empty,
+            Action = action,
+            ChangedBy = username,
+            ChangedAt = now,
+            Details = BuildAuditDetails(entry, action)
+        };
+    }
+
+    private static string? BuildAuditDetails(EntityEntry entry, string action)
+    {
+        var systemFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(BaseEntity.Id),
+            nameof(BaseEntity.CreatedBy), nameof(BaseEntity.CreatedDate),
+            nameof(BaseEntity.ModifiedBy), nameof(BaseEntity.ModifiedDate),
+            nameof(BaseEntity.DeletedBy), nameof(BaseEntity.DeletedDate),
+            "CreatedAt", "UpdatedAt"
+        };
+
+        if (action == "Created")
+        {
+            var snapshot = new Dictionary<string, object?>();
+            foreach (var prop in entry.Properties)
+            {
+                if (systemFields.Contains(prop.Metadata.Name)) continue;
+                var value = prop.CurrentValue;
+                if (value is null) continue;
+                snapshot[prop.Metadata.Name] = FormatAuditValue(value);
+            }
+            return snapshot.Count > 0 ? JsonSerializer.Serialize(snapshot) : null;
+        }
+
+        var changes = new List<object>();
+        foreach (var prop in entry.Properties)
+        {
+            if (!prop.IsModified || systemFields.Contains(prop.Metadata.Name)) continue;
+            if (Equals(prop.OriginalValue, prop.CurrentValue)) continue;
+
+            changes.Add(new
+            {
+                name = prop.Metadata.Name,
+                from = FormatAuditValue(prop.OriginalValue),
+                to = FormatAuditValue(prop.CurrentValue)
+            });
+
+            if (changes.Count >= 100) break;
+        }
+
+        if (changes.Count == 0)
+        {
+            return null;
+        }
+
+        var payload = new Dictionary<string, object> { ["changes"] = changes };
+        if (action == "Deleted")
+        {
+            payload["deleted"] = true;
+        }
+
+        return JsonSerializer.Serialize(payload);
+    }
+
+    private static object? FormatAuditValue(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            byte[] bytes => Convert.ToBase64String(bytes),
+            string str => str.Length > 500 ? str[..500] : str,
+            DateTime dt => dt.ToString("O", CultureInfo.InvariantCulture),
+            DateTimeOffset dto => dto.ToString("O", CultureInfo.InvariantCulture),
+            Enum => value.ToString(),
+            _ => value
+        };
     }
 
     private static void ValidateOrganizationOwnership(
@@ -611,10 +752,10 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         modelBuilder.Entity<Client>(e =>
         {
             e.ToTable("clients");
-            e.Property(x => x.Name).IsRequired();
+            e.Property(x => x.Name).IsRequired().HasMaxLength(200);
             e.Property(x => x.Code).HasMaxLength(30);
             e.HasIndex(x => x.Name);
-            e.HasIndex(x => x.Code);
+            e.HasIndex(x => x.Code).IsUnique();
         });
 
         // === ClientRate ===
@@ -622,6 +763,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         {
             e.ToTable("client_rates");
             e.Property(x => x.Rate).HasColumnType("numeric(18,2)");
+            e.Property(x => x.VatRate).HasColumnType("numeric(18,2)");
             e.Property(x => x.ItemType).HasConversion<int>();
             e.HasIndex(x => new { x.ClientId, x.ItemType, x.ItemId }).IsUnique();
             e.HasOne(x => x.Client)
@@ -830,9 +972,11 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         {
             e.ToTable("registrations");
             e.Property(x => x.OwnerName).IsRequired().HasMaxLength(300);
+            e.Property(x => x.OwnerMobile).HasMaxLength(50);
             e.Property(x => x.Barcode).IsRequired().HasMaxLength(50);
             e.Property(x => x.ReferenceNumber).HasMaxLength(50);
             e.Property(x => x.ClinicalNotes).HasMaxLength(2000);
+            e.Property(x => x.TotalVat).HasColumnType("numeric(18,2)");
             e.HasIndex(x => x.Barcode).IsUnique();
             e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
@@ -857,6 +1001,9 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.ItemType).IsRequired();
             e.Property(x => x.ItemBarcode).IsRequired().HasMaxLength(50);
             e.Property(x => x.SampleNotes).HasMaxLength(500);
+            e.Property(x => x.VatRate).HasColumnType("numeric(18,2)");
+            e.Property(x => x.VatAmount).HasColumnType("numeric(18,2)");
+            e.Property(x => x.Quantity).HasDefaultValue(1);
             e.HasIndex(x => x.ItemBarcode).IsUnique();
 
             e.HasOne(x => x.Registration).WithMany(r => r.Items).HasForeignKey(x => x.RegistrationId).OnDelete(DeleteBehavior.Cascade);
@@ -1095,4 +1242,6 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         // === If you have BarcodeSequence entity ===
         // modelBuilder.Entity<BarcodeSequence>(e => { e.ToTable("barcode_sequences"); ... });
     }
+
+    private sealed record PendingAuditRecordId(AuditLog Log, BaseEntity Entity);
 }

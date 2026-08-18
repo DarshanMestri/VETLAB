@@ -45,7 +45,9 @@
             <button class="btn btn-sm btn-outline-secondary me-2" (click)="startEdit(c)">
               Edit
             </button>
-            <button class="btn btn-sm btn-outline-danger" (click)="remove(c.id)">Delete</button>
+            <button class="btn btn-sm btn-outline-warning" (click)="toggle(c)">
+              {{ c.isActive ? 'Deactivate' : 'Activate' }}
+            </button>
           </td>
         </ng-container>
 

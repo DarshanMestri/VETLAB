@@ -58,7 +58,6 @@ type Row = { id: number; name: string; symbol: string; isActive: boolean };
               <button class="btn btn-sm btn-outline-warning me-1" (click)="toggle(r)">
                 {{ r.isActive ? 'Deactivate' : 'Activate' }}
               </button>
-              <button class="btn btn-sm btn-outline-danger" (click)="remove(r)">Delete</button>
             </td>
           </tr>
         </tbody>
@@ -217,12 +216,5 @@ export class UnitsListComponent {
         next: () => (r.isActive = newVal),
         error: (e) => alert(e?.error ?? 'Toggle failed'),
       });
-  }
-
-  remove(r: Row) {
-    if (!confirm(`Delete "${r.name}"?`)) return;
-    this.http
-      .delete(`/api/units/${r.id}`)
-      .subscribe({ next: () => this.load(), error: (e) => alert(e?.error ?? 'Delete failed') });
   }
 }

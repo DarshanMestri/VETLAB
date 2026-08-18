@@ -105,10 +105,10 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                 <div class="btn-group btn-group-sm" role="group">
                   <button class="btn btn-outline-primary" (click)="openEdit(row)">Edit</button>
                   <button class="btn btn-outline-info" (click)="openDepartmentManager(row)">Departments</button>
+                  <button class="btn btn-outline-warning" (click)="openTestManager(row)">Tests</button>
                   <button class="btn btn-outline-secondary" (click)="toggleStatus(row)">
                     {{ row.isActive ? 'Deactivate' : 'Activate' }}
                   </button>
-                  <button class="btn btn-outline-danger" (click)="remove(row)">Delete</button>
                 </div>
               </td>
             </tr>
@@ -136,13 +136,13 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 
       <section class="card mt-4" *ngIf="selectedBranch()">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <span>Department assignments for {{ selectedBranch()?.name }}</span>
+          <span>Assignments for {{ selectedBranch()?.name }}</span>
           <button class="btn btn-sm btn-outline-secondary" (click)="closeDepartmentManager()">Close</button>
         </div>
         <div class="card-body">
-          <div class="row g-3">
+          <h6 class="border-bottom pb-2">Departments</h6>
+          <div class="row g-3 mb-4">
             <div class="col-md-6">
-              <h6>Assigned departments</h6>
               <div class="list-group">
                 <div class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let item of assignedDepartments()">
                   <div>
@@ -161,8 +161,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             </div>
 
             <div class="col-md-6">
-              <h6>Available departments</h6>
-              <div class="input-group mb-2">
+              <div class="input-group">
                 <select class="form-select" [(ngModel)]="selectedDepartmentId">
                   <option [ngValue]="null">Select a department</option>
                   <option *ngFor="let dept of availableDepartments()" [ngValue]="dept.id">
@@ -173,7 +172,43 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                   Assign
                 </button>
               </div>
-              <div class="text-muted small" *ngIf="!availableDepartments().length">All active departments are already assigned.</div>
+              <div class="text-muted small mt-1" *ngIf="!availableDepartments().length">All active departments are already assigned.</div>
+            </div>
+          </div>
+
+          <h6 class="border-bottom pb-2">Tests</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="list-group">
+                <div class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let item of assignedTests()">
+                  <div>
+                    <div class="fw-semibold">{{ item.testName }}</div>
+                    <small class="text-muted">{{ item.testCode || 'No code' }}</small>
+                  </div>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" (click)="toggleAssignedTest(item)">
+                      {{ item.isActive ? 'Disable' : 'Enable' }}
+                    </button>
+                    <button class="btn btn-outline-danger" (click)="removeAssignedTest(item)">Remove</button>
+                  </div>
+                </div>
+                <div class="list-group-item text-muted" *ngIf="!assignedTests().length">No tests assigned.</div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="input-group">
+                <select class="form-select" [(ngModel)]="selectedTestId">
+                  <option [ngValue]="null">Select a test</option>
+                  <option *ngFor="let test of availableTests()" [ngValue]="test.id">
+                    {{ test.name }}{{ test.code ? ' (' + test.code + ')' : '' }}
+                  </option>
+                </select>
+                <button class="btn btn-primary" type="button" [disabled]="selectedTestId == null" (click)="assignSelectedTest()">
+                  Assign
+                </button>
+              </div>
+              <div class="text-muted small mt-1" *ngIf="!availableTests().length">All active tests are already assigned.</div>
             </div>
           </div>
         </div>
@@ -256,12 +291,15 @@ export class BranchesListComponent implements OnInit {
   readonly selectedBranch = signal<BranchListItem | null>(null);
   readonly assignedDepartments = signal<any[]>([]);
   readonly availableDepartments = signal<any[]>([]);
+  readonly assignedTests = signal<any[]>([]);
+  readonly availableTests = signal<any[]>([]);
 
   search = '';
   clinicFilter: number | null = null;
   clinics: ClinicOption[] = [];
   form = this.emptyForm();
   selectedDepartmentId: number | null = null;
+  selectedTestId: number | null = null;
   readonly Math = Math;
 
   ngOnInit(): void {
@@ -352,8 +390,22 @@ export class BranchesListComponent implements OnInit {
   openDepartmentManager(row: BranchListItem): void {
     this.selectedBranch.set(row);
     this.selectedDepartmentId = null;
+    this.selectedTestId = null;
     this.loadAssignedDepartments(row.id);
     this.loadAvailableDepartments(row.id);
+    this.loadAssignedTests(row.id);
+    this.loadAvailableTests(row.id);
+    this.error.set('');
+  }
+
+  openTestManager(row: BranchListItem): void {
+    this.selectedBranch.set(row);
+    this.selectedDepartmentId = null;
+    this.selectedTestId = null;
+    this.loadAssignedDepartments(row.id);
+    this.loadAvailableDepartments(row.id);
+    this.loadAssignedTests(row.id);
+    this.loadAvailableTests(row.id);
     this.error.set('');
   }
 
@@ -361,7 +413,10 @@ export class BranchesListComponent implements OnInit {
     this.selectedBranch.set(null);
     this.assignedDepartments.set([]);
     this.availableDepartments.set([]);
+    this.assignedTests.set([]);
+    this.availableTests.set([]);
     this.selectedDepartmentId = null;
+    this.selectedTestId = null;
   }
 
   loadAssignedDepartments(branchId: number): void {
@@ -416,18 +471,61 @@ export class BranchesListComponent implements OnInit {
     });
   }
 
-  toggleStatus(row: BranchListItem): void {
-    this.error.set('');
-    this.svc.toggleStatus(row.id, !row.isActive).subscribe({
-      next: () => this.load(),
+  loadAssignedTests(branchId: number): void {
+    this.svc.getBranchTests(branchId).subscribe({
+      next: (items) => this.assignedTests.set(items ?? []),
       error: (err) => this.error.set(this.extractMessage(err)),
     });
   }
 
-  remove(row: BranchListItem): void {
-    if (!confirm(`Delete ${row.name}?`)) return;
+  loadAvailableTests(branchId: number): void {
+    this.svc.getAvailableTests(branchId).subscribe({
+      next: (items) => this.availableTests.set(items ?? []),
+      error: (err) => this.error.set(this.extractMessage(err)),
+    });
+  }
+
+  assignSelectedTest(): void {
+    const branch = this.selectedBranch();
+    if (!branch || this.selectedTestId == null) return;
+
+    this.svc.assignTest(branch.id, this.selectedTestId).subscribe({
+      next: () => {
+        this.selectedTestId = null;
+        this.loadAssignedTests(branch.id);
+        this.loadAvailableTests(branch.id);
+      },
+      error: (err) => this.error.set(this.extractMessage(err)),
+    });
+  }
+
+  toggleAssignedTest(item: any): void {
+    const branch = this.selectedBranch();
+    if (!branch) return;
+
+    this.svc.toggleTestStatus(item.id, !item.isActive).subscribe({
+      next: () => this.loadAssignedTests(branch.id),
+      error: (err) => this.error.set(this.extractMessage(err)),
+    });
+  }
+
+  removeAssignedTest(item: any): void {
+    const branch = this.selectedBranch();
+    if (!branch) return;
+    if (!confirm(`Remove ${item.testName} from ${branch.name}?`)) return;
+
+    this.svc.removeTest(item.id).subscribe({
+      next: () => {
+        this.loadAssignedTests(branch.id);
+        this.loadAvailableTests(branch.id);
+      },
+      error: (err) => this.error.set(this.extractMessage(err)),
+    });
+  }
+
+  toggleStatus(row: BranchListItem): void {
     this.error.set('');
-    this.svc.delete(row.id).subscribe({
+    this.svc.toggleStatus(row.id, !row.isActive).subscribe({
       next: () => this.load(),
       error: (err) => this.error.set(this.extractMessage(err)),
     });

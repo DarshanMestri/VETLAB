@@ -18,6 +18,17 @@ type WorkItem = {
   sampleStatus: string;
   technicianVerified: boolean;
   pathologistAuthenticated: boolean;
+  animalNames?: string;
+  animalCount?: number;
+  ownerMobile?: string;
+};
+
+type WorkGroup = {
+  registrationId: number;
+  ownerName: string;
+  ownerMobile?: string;
+  animalNames: string;
+  rows: WorkItem[];
 };
 
 @Component({
@@ -33,20 +44,39 @@ type WorkItem = {
 
       <div class="row g-2 mb-3">
         <div class="col-md-3">
+          <label class="form-label">Owner (name / mobile)</label>
+          <div class="input-group input-group-sm">
+            <input
+              class="form-control"
+              [(ngModel)]="ownerFilter"
+              name="ownerFilter"
+              (keyup.enter)="reload()"
+              placeholder="Search owner by name or mobile…"
+            />
+            <button class="btn btn-outline-primary" type="button" (click)="reload()">Search</button>
+            <button
+              class="btn btn-outline-secondary"
+              type="button"
+              (click)="clearOwnerFilter()"
+              [disabled]="!ownerFilter"
+            >✕</button>
+          </div>
+        </div>
+        <div class="col-md-2">
           <label class="form-label">Department ID</label>
-          <input class="form-control" type="number" [(ngModel)]="departmentId" name="departmentId" />
+          <input class="form-control form-control-sm" type="number" [(ngModel)]="departmentId" name="departmentId" (change)="reload()" />
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Test ID</label>
-          <input class="form-control" type="number" [(ngModel)]="testId" name="testId" />
+          <input class="form-control form-control-sm" type="number" [(ngModel)]="testId" name="testId" (change)="reload()" />
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Barcode</label>
-          <input class="form-control" [(ngModel)]="barcode" name="barcode" />
+          <input class="form-control form-control-sm" [(ngModel)]="barcode" name="barcode" (change)="reload()" />
         </div>
         <div class="col-md-3">
           <label class="form-label">Status</label>
-          <select class="form-select" [(ngModel)]="status" name="status">
+          <select class="form-select form-select-sm" [(ngModel)]="status" name="status" (change)="reload()">
             <option value="">Pending + InProgress</option>
             <option>Pending</option>
             <option>InProgress</option>
@@ -55,24 +85,35 @@ type WorkItem = {
         </div>
       </div>
 
-      <table class="table table-sm table-striped" *ngIf="rows.length">
+      <table class="table table-sm table-striped align-middle" *ngIf="rows.length">
         <thead>
           <tr>
             <th>Barcode</th>
             <th>Owner</th>
             <th>Test</th>
             <th>Species</th>
+            <th>Animals</th>
             <th>Lab Status</th>
             <th>Validation</th>
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody>
-          <tr *ngFor="let row of rows">
+        <tbody *ngFor="let group of groups">
+          <tr class="table-primary">
+            <td colspan="8">
+              <strong>{{ group.ownerName }}</strong>
+              <small *ngIf="group.ownerMobile" class="text-muted ms-2">Mobile: {{ group.ownerMobile }}</small>
+              <span *ngIf="group.animalNames" class="text-muted ms-2">Animals: {{ group.animalNames }}</span>
+            </td>
+          </tr>
+          <tr *ngFor="let row of group.rows">
             <td>{{ row.itemBarcode }}</td>
             <td>{{ row.ownerName }}</td>
             <td>{{ row.testCode }} - {{ row.testName }}</td>
-            <td>{{ row.speciesName || '-' }}</td>
+            <td>{{ row.speciesName || 'Any' }}</td>
+            <td>
+              <small>{{ row.animalNames || '-' }}</small>
+            </td>
             <td>
               <div>{{ row.status }}</div>
               <small class="text-muted">Sample: {{ row.sampleStatus }}</small>
@@ -84,9 +125,27 @@ type WorkItem = {
               </small>
             </td>
             <td class="d-flex flex-wrap gap-1">
-              <button class="btn btn-outline-secondary btn-sm" type="button" (click)="updateSample(row.registrationItemId, 'collect')">Collect</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" (click)="updateSample(row.registrationItemId, 'receive')">Receive</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" (click)="updateSample(row.registrationItemId, 'process')">Process</button>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                [disabled]="row.sampleStatus !== 'NotCollected'"
+                title="Sample not yet collected"
+                (click)="updateSample(row.registrationItemId, 'collect')"
+              >Collect</button>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                [disabled]="row.sampleStatus !== 'Collected'"
+                title="Collect the sample first, or already received"
+                (click)="updateSample(row.registrationItemId, 'receive')"
+              >Receive</button>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                [disabled]="row.sampleStatus !== 'Received'"
+                title="Receive the sample first, or already processed"
+                (click)="updateSample(row.registrationItemId, 'process')"
+              >Process</button>
               <a class="btn btn-outline-primary btn-sm" [routerLink]="['/results', row.registrationItemId]">Enter</a>
               <button class="btn btn-outline-dark btn-sm" type="button" (click)="downloadReport(row.registrationItemId, 'pdf')">PDF</button>
               <button class="btn btn-outline-dark btn-sm" type="button" (click)="downloadReport(row.registrationItemId, 'png')">PNG</button>
@@ -106,6 +165,7 @@ export class ResultsWorklistComponent {
   private http = inject(HttpClient);
 
   rows: WorkItem[] = [];
+  ownerFilter = '';
   departmentId?: number;
   testId?: number;
   barcode = '';
@@ -115,8 +175,28 @@ export class ResultsWorklistComponent {
     this.reload();
   }
 
+  get groups(): WorkGroup[] {
+    const map = new Map<number, WorkGroup>();
+    for (const row of this.rows) {
+      let group = map.get(row.registrationId);
+      if (!group) {
+        group = {
+          registrationId: row.registrationId,
+          ownerName: row.ownerName,
+          ownerMobile: row.ownerMobile,
+          animalNames: row.animalNames ?? '',
+          rows: [],
+        };
+        map.set(row.registrationId, group);
+      }
+      group.rows.push(row);
+    }
+    return [...map.values()];
+  }
+
   reload() {
     const params = new URLSearchParams();
+    if (this.ownerFilter.trim()) params.set('owner', this.ownerFilter.trim());
     if (this.departmentId) params.set('departmentId', String(this.departmentId));
     if (this.testId) params.set('testId', String(this.testId));
     if (this.barcode.trim()) params.set('barcode', this.barcode.trim());
@@ -125,6 +205,11 @@ export class ResultsWorklistComponent {
     this.http.get<WorkItem[]>(`/api/results/worklist?${params.toString()}`).subscribe((rows) => {
       this.rows = rows ?? [];
     });
+  }
+
+  clearOwnerFilter() {
+    this.ownerFilter = '';
+    this.reload();
   }
 
   updateSample(registrationItemId: number, action: 'collect' | 'receive' | 'process') {

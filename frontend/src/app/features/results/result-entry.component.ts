@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpResponse } from '@angular/common/http';
+import { AuthService } from '../../core/auth.service';
 
 enum ResultEntryType {
   Numeric = 1,
@@ -46,6 +47,9 @@ type Detail = {
   digitalSignature?: string | null;
   verificationRemarks?: string | null;
   values: ValueRow[];
+  ownerName?: string;
+  animalNames?: string;
+  animalCount?: number;
 };
 
 @Component({
@@ -57,6 +61,12 @@ type Detail = {
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
           <h3 class="mb-1">Result Entry — {{ detail.itemBarcode }}</h3>
+          <div class="small text-muted">
+            Owner: {{ detail.ownerName || '—' }}
+            <ng-container *ngIf="detail.animalNames">
+              • Animals ({{ detail.animalCount ?? 0 }}): {{ detail.animalNames }}
+            </ng-container>
+          </div>
           <div class="small text-muted">
             Sample: {{ detail.sampleStatus }} • Technician:
             {{ detail.technicianVerifiedBy || 'Pending' }} • Pathologist:
@@ -196,6 +206,7 @@ type Detail = {
 export class ResultEntryComponent {
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
+  private auth = inject(AuthService);
 
   readonly entryTypes = ResultEntryType;
 
@@ -217,8 +228,9 @@ export class ResultEntryComponent {
   reload() {
     this.http.get<Detail>(`/api/results/${this.id}`).subscribe((detail) => {
       this.detail = detail;
-      this.verifiedBy = detail.technicianVerifiedBy ?? '';
-      this.authenticatedBy = detail.pathologistAuthenticatedBy ?? '';
+      const currentUser = this.auth.getUsername() ?? '';
+      this.verifiedBy = detail.technicianVerifiedBy || currentUser;
+      this.authenticatedBy = detail.pathologistAuthenticatedBy || currentUser;
       this.digitalSignature = detail.digitalSignature ?? '';
       this.remarks = detail.verificationRemarks ?? '';
     });

@@ -10,6 +10,7 @@ interface NavItem {
   route: string;
   roles?: string[];
   icon: string;
+  step?: number;
 }
 
 interface NavGroup {
@@ -81,7 +82,43 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Profiles', route: '/profiles', roles: ['Admin', 'Manager'], icon: ICONS.layers },
       { label: 'Packages', route: '/packages', roles: ['Admin', 'Manager'], icon: ICONS.package },
       { label: 'Rates', route: '/rates', roles: ['Admin', 'Manager'], icon: ICONS.tag },
-      { label: 'Units', route: '/units', roles: ['Admin', 'Manager'], icon: ICONS.ruler },
+    ],
+  },
+  {
+    key: 'masters',
+    label: 'Masters',
+    icon: ICONS.database,
+    children: [
+      {
+        label: 'Organizations',
+        route: '/organizations',
+        roles: ['Admin'],
+        icon: ICONS.building,
+        step: 1,
+      },
+      {
+        label: 'Laboratory Groups',
+        route: '/laboratory-groups',
+        roles: ['Admin'],
+        icon: ICONS.branches,
+        step: 2,
+      },
+      {
+        label: 'Laboratories',
+        route: '/laboratories',
+        roles: ['Admin'],
+        icon: ICONS.flask,
+        step: 3,
+      },
+      { label: 'Locations', route: '/branches', roles: ['Admin'], icon: ICONS.mapPin, step: 4 },
+      {
+        label: 'Departments',
+        route: '/departments',
+        roles: ['Admin', 'Manager'],
+        icon: ICONS.layout,
+        step: 5,
+      },
+      { label: 'Units', route: '/units', roles: ['Admin', 'Manager'], icon: ICONS.ruler, step: 6 },
     ],
   },
   {
@@ -90,26 +127,24 @@ const NAV_GROUPS: NavGroup[] = [
     icon: ICONS.shield,
     children: [
       {
-        label: 'Departments',
-        route: '/departments',
-        roles: ['Admin', 'Manager'],
-        icon: ICONS.layout,
-      },
-      { label: 'Organizations', route: '/organizations', roles: ['Admin'], icon: ICONS.building },
-      {
-        label: 'Laboratory Groups',
-        route: '/laboratory-groups',
+        label: 'Laboratory Master',
+        route: '/laboratory-master',
         roles: ['Admin'],
-        icon: ICONS.branches,
+        icon: ICONS.database,
       },
-      { label: 'Locations', route: '/branches', roles: ['Admin'], icon: ICONS.mapPin },
       {
         label: 'User Creation Master',
         route: '/users',
         roles: ['Admin'],
         icon: ICONS.userPlus,
       },
-      { label: 'Masters', route: '/masters/breeds', roles: ['Admin'], icon: ICONS.database },
+      {
+        label: 'User Login & Hierarchy',
+        route: '/user-hierarchy',
+        roles: ['Admin'],
+        icon: ICONS.activity,
+      },
+      { label: 'Masters', route: '/masters/breeds', roles: ['Admin'], icon: ICONS.tag },
     ],
   },
   {
@@ -202,7 +237,8 @@ const NAV_GROUPS: NavGroup[] = [
                 routerLinkActive="active"
                 (click)="closeSidebar()"
               >
-                <span class="child-icon" [innerHTML]="trustSvg(child.icon)"></span>
+                <span class="child-step" *ngIf="child.step">{{ child.step }}</span>
+                <span class="child-icon" *ngIf="!child.step" [innerHTML]="trustSvg(child.icon)"></span>
                 <span class="child-label">{{ child.label }}</span>
               </a>
             </div>
@@ -473,6 +509,27 @@ const NAV_GROUPS: NavGroup[] = [
           width: 16px;
           height: 16px;
         }
+      }
+
+      .child-step {
+        display: grid;
+        flex: 0 0 16px;
+        width: 16px;
+        height: 16px;
+        place-items: center;
+        color: #dbeafe;
+        border: 1px solid rgba(147, 197, 253, 0.45);
+        border-radius: 999px;
+        background: rgba(37, 99, 235, 0.4);
+        font-size: 0.62rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .nav-link.active .child-step {
+        color: #fff;
+        border-color: #60a5fa;
+        background: rgba(37, 99, 235, 0.7);
       }
 
       .nav-link.active .child-icon {

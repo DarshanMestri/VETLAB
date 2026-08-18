@@ -38,7 +38,7 @@ export class ClientApi {
   update(id: number, payload: Omit<Client, 'id'>) {
     return this.http.put<Client>(`${API}/${id}`, payload);
   }
-  delete(id: number) {
-    return this.http.delete(`${API}/${id}`);
+  toggleStatus(id: number, isActive: boolean) {
+    return this.http.patch(`${API}/${id}/status`, isActive);
   }
 }

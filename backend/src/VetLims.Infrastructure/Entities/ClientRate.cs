@@ -17,6 +17,7 @@ public class ClientRate : BaseEntity
     public RegItemType ItemType { get; set; }
 
     public decimal Rate { get; set; }
+    public decimal VatRate { get; set; } = 5m;
     public string? Currency { get; set; }
     public bool IsActive { get; set; } = true;
 }

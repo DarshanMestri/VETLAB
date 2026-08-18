@@ -57,7 +57,6 @@ type Row = { id: number; code: string; name: string; isActive: boolean };
               <button class="btn btn-sm btn-outline-warning me-1" (click)="toggle(r)">
                 {{ r.isActive ? 'Deactivate' : 'Activate' }}
               </button>
-              <button class="btn btn-sm btn-outline-danger" (click)="remove(r)">Delete</button>
             </td>
           </tr>
         </tbody>
@@ -128,6 +127,18 @@ export class ClientsListComponent {
     this.dlgOpen = true;
   }
 
+  private extractError(err: any, fallback: string): string {
+    const body = err?.error;
+    if (typeof body === 'string') return body || fallback;
+    if (body?.message) return body.message;
+    if (body?.errors) {
+      const msgs = Object.values(body.errors).flat().filter(Boolean);
+      if (msgs.length) return msgs.join('\n');
+    }
+    if (body?.title) return body.title;
+    return fallback;
+  }
+
   save(model: any) {
     if (this.editingId == null) {
       this.http.post<Row>('/api/clients', model).subscribe({
@@ -135,7 +146,7 @@ export class ClientsListComponent {
           this.dlgOpen = false;
           this.load();
         },
-        error: (err) => alert(err?.error ?? 'Create failed'),
+        error: (err) => alert(this.extractError(err, 'Create failed')),
       });
     } else {
       this.http.put(`/api/clients/${this.editingId}`, model).subscribe({
@@ -143,7 +154,7 @@ export class ClientsListComponent {
           this.dlgOpen = false;
           this.load();
         },
-        error: (err) => alert(err?.error ?? 'Update failed'),
+        error: (err) => alert(this.extractError(err, 'Update failed')),
       });
     }
   }
@@ -158,17 +169,7 @@ export class ClientsListComponent {
         next: (_) => {
           r.isActive = newVal;
         },
-        error: (err) => alert(err?.error ?? 'Toggle failed'),
+        error: (err) => alert(this.extractError(err, 'Toggle failed')),
       });
-  }
-
-  remove(r: Row) {
-    if (!confirm(`Delete client "${r.name}"?`)) return;
-    this.http.delete(`/api/clients/${r.id}`).subscribe({
-      next: (_) => {
-        this.load();
-      },
-      error: (err) => alert(err?.error ?? 'Delete failed'),
-    });
   }
 }

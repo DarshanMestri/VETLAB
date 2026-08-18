@@ -18,12 +18,25 @@ type TestRow = {
 type Dept = { id: number; name: string };
 type Unit = { id: number; name: string; symbol: string };
 type ParamRow = {
-  testParameterId: number;
+  id: number;
+  testId: number;
   name: string;
   unitId: number | null;
   unitSymbol?: string | null;
   sortOrder: number;
 };
+type RangeRow = {
+  id: number;
+  testParameterId: number;
+  speciesId: number;
+  ageFromDays: number | null;
+  ageToDays: number | null;
+  low: number | null;
+  high: number | null;
+  note: string | null;
+  isActive: boolean;
+};
+type Species = { id: number; name: string };
 
 @Component({
   standalone: true,
@@ -84,7 +97,6 @@ type ParamRow = {
               <button class="btn btn-sm btn-outline-warning me-1" (click)="toggle(r)">
                 {{ r.isActive ? 'Deactivate' : 'Activate' }}
               </button>
-              <button class="btn btn-sm btn-outline-danger me-1" (click)="remove(r)">Delete</button>
               <button class="btn btn-sm btn-outline-success" (click)="openParams(r)">
                 Parameters
               </button>
@@ -178,7 +190,7 @@ type ParamRow = {
       [title]="paramTitle"
       [model]="paramModel"
       okText="Save Param"
-      (submit)="saveParam($event)"
+      (submit)="saveParam()"
       (closed)="closeParams()"
     >
       <div class="mb-2">
@@ -220,11 +232,14 @@ type ParamRow = {
           </thead>
           <tbody>
             <tr *ngFor="let p of params">
-              <td>{{ p.testParameterId }}</td>
+              <td>{{ p.id }}</td>
               <td>{{ p.name }}</td>
               <td>{{ unitById(p.unitId)?.symbol || '-' }}</td>
               <td>{{ p.sortOrder }}</td>
               <td class="text-end">
+                <button class="btn btn-sm btn-outline-info me-1" (click)="openRanges(p)">
+                  Ranges
+                </button>
                 <button class="btn btn-sm btn-outline-primary me-1" (click)="editParam(p)">
                   Edit
                 </button>
@@ -236,6 +251,85 @@ type ParamRow = {
           </tbody>
         </table>
         <p *ngIf="!params.length" class="mb-0">No parameters yet.</p>
+      </div>
+    </app-simple-dialog>
+
+    <!-- Reference Range manager -->
+    <app-simple-dialog
+      *ngIf="rangeOpen"
+      [title]="rangeTitle"
+      [model]="rangeModel"
+      okText="Save Range"
+      (submit)="saveRange()"
+      (closed)="closeRanges()"
+    >
+      <div class="mb-2">
+        <label class="form-label">Species</label>
+        <select class="form-select" [(ngModel)]="rangeModel.speciesId" name="speciesId" required>
+          <option [ngValue]="null" disabled>Select species...</option>
+          <option *ngFor="let s of speciesList" [ngValue]="s.id">{{ s.name }}</option>
+        </select>
+      </div>
+      <div class="row mb-2">
+        <div class="col">
+          <label class="form-label">Age From (days)</label>
+          <input class="form-control" type="number" [(ngModel)]="rangeModel.ageFromDays" name="ageFromDays" />
+        </div>
+        <div class="col">
+          <label class="form-label">Age To (days)</label>
+          <input class="form-control" type="number" [(ngModel)]="rangeModel.ageToDays" name="ageToDays" />
+        </div>
+      </div>
+      <div class="row mb-2">
+        <div class="col">
+          <label class="form-label">Low</label>
+          <input class="form-control" type="number" step="any" [(ngModel)]="rangeModel.low" name="low" />
+        </div>
+        <div class="col">
+          <label class="form-label">High</label>
+          <input class="form-control" type="number" step="any" [(ngModel)]="rangeModel.high" name="high" />
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Note</label>
+        <input class="form-control" [(ngModel)]="rangeModel.note" name="rangeNote" />
+      </div>
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" [(ngModel)]="rangeModel.isActive" name="rangeActive" id="rangeActiveChk" />
+        <label for="rangeActiveChk" class="form-check-label">Active</label>
+      </div>
+
+      <div class="border rounded p-2 mt-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <strong>Existing Ranges</strong>
+          <button class="btn btn-sm btn-outline-secondary" (click)="reloadRanges()">Reload</button>
+        </div>
+        <table class="table table-sm mt-2" *ngIf="ranges.length">
+          <thead>
+            <tr>
+              <th>Species</th>
+              <th>Age Range</th>
+              <th>Low</th>
+              <th>High</th>
+              <th>Note</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of ranges">
+              <td>{{ speciesName(r.speciesId) }}</td>
+              <td>{{ r.ageFromDays ?? '-' }} — {{ r.ageToDays ?? '-' }} days</td>
+              <td>{{ r.low ?? '-' }}</td>
+              <td>{{ r.high ?? '-' }}</td>
+              <td>{{ r.note || '-' }}</td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-primary me-1" (click)="editRange(r)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" (click)="deleteRange(r)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p *ngIf="!ranges.length" class="mb-0">No reference ranges yet.</p>
       </div>
     </app-simple-dialog>
   `,
@@ -270,10 +364,22 @@ export class TestsListComponent {
   currentTestId: number | null = null;
   params: ParamRow[] = [];
 
+  // Ranges dialog
+  rangeOpen = false;
+  rangeTitle = 'Reference Ranges';
+  rangeModel: any = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+  editingRangeId: number | null = null;
+  rangeParamId: number | null = null;
+  ranges: RangeRow[] = [];
+
+  // Lookup data
+  speciesList: Species[] = [];
+
   ngOnInit() {
     this.load();
     this.loadDepts();
     this.loadUnits();
+    this.loadSpecies();
   }
 
   // ===== Tests list =====
@@ -292,6 +398,11 @@ export class TestsListComponent {
     this.http
       .get<any>('/api/units?page=1&pageSize=999')
       .subscribe((res) => (this.units = res?.items ?? []));
+  }
+  loadSpecies() {
+    this.http
+      .get<any>('/api/species?page=1&pageSize=999')
+      .subscribe((res) => (this.speciesList = res?.items ?? []));
   }
   deptName(id: number) {
     return this.depts.find((d) => d.id === id)?.name || id;
@@ -417,13 +528,6 @@ export class TestsListComponent {
       });
   }
 
-  remove(r: TestRow) {
-    if (!confirm(`Delete "${r.name}"?`)) return;
-    this.http
-      .delete(`/api/tests/${r.id}`)
-      .subscribe({ next: () => this.load(), error: (e) => alert(e?.error ?? 'Delete failed') });
-  }
-
   // ===== Parameters manager =====
   openParams(r: TestRow) {
     this.currentTestId = r.id;
@@ -446,42 +550,60 @@ export class TestsListComponent {
     if (!this.currentTestId) return;
     this.http
       .get<ParamRow[]>(`/api/tests/${this.currentTestId}/parameters`)
-      .subscribe((res) => (this.params = (res ?? []).sort((a, b) => a.sortOrder - b.sortOrder)));
+      .subscribe((res) => (this.params = (res ?? []).filter((p) => p.name).sort((a, b) => a.sortOrder - b.sortOrder)));
   }
 
-  saveParam(model: any) {
+  saveParam() {
     if (!this.currentTestId) return;
-    // If model has 'testParameterId' => update; else create
-    if (model.testParameterId) {
+    const m = this.paramModel;
+    const name = m.name?.trim() ?? '';
+    if (!name) {
+      alert('Parameter name is required.');
+      return;
+    }
+    const dup = this.params.some(
+      (p) => p.name.toLowerCase() === name.toLowerCase() && p.id !== m.id
+    );
+    if (dup) {
+      alert('A parameter with this name already exists for this test.');
+      return;
+    }
+    const payload = {
+      testId: this.currentTestId,
+      name,
+      unitId: m.unitId ?? null,
+      sortOrder: Number(m.sortOrder) || 0,
+      isActive: m.isActive ?? true,
+    };
+    if (m.id) {
       this.http
-        .put(`/api/tests/${this.currentTestId}/parameters/${model.testParameterId}`, model)
+        .put(`/api/tests/${this.currentTestId}/parameters/${m.id}`, payload)
         .subscribe({
           next: () => {
             this.paramModel = { name: '', unitId: null, sortOrder: 1 };
             this.reloadParams();
           },
-          error: (e) => alert(e?.error ?? 'Update failed'),
+          error: (e) => alert(e?.error?.title ?? e?.error ?? 'Update failed'),
         });
     } else {
-      this.http.post(`/api/tests/${this.currentTestId}/parameters`, model).subscribe({
+      this.http.post(`/api/tests/${this.currentTestId}/parameters`, payload).subscribe({
         next: () => {
           this.paramModel = { name: '', unitId: null, sortOrder: 1 };
           this.reloadParams();
         },
-        error: (e) => alert(e?.error ?? 'Create failed'),
+        error: (e) => alert(e?.error?.title ?? e?.error ?? 'Create failed'),
       });
     }
   }
 
   editParam(p: ParamRow) {
-    // clone param into form model
     this.paramModel = { ...p };
   }
 
   deleteParam(p: ParamRow) {
     if (!this.currentTestId) return;
     if (!confirm(`Delete param "${p.name}"?`)) return;
-    this.http.delete(`/api/tests/${this.currentTestId}/parameters/${p.testParameterId}`).subscribe({
+    this.http.delete(`/api/tests/${this.currentTestId}/parameters/${p.id}`).subscribe({
       next: () => this.reloadParams(),
       error: (e) => alert(e?.error ?? 'Delete failed'),
     });
@@ -489,5 +611,95 @@ export class TestsListComponent {
 
   unitById(id: number | null | undefined) {
     return id == null ? null : this.units.find((u) => u.id === id) || null;
+  }
+
+  // ===== Reference Ranges manager =====
+  openRanges(p: ParamRow) {
+    this.rangeParamId = p.id;
+    this.rangeTitle = `Ranges — ${p.name}`;
+    this.rangeModel = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+    this.editingRangeId = null;
+    this.rangeOpen = true;
+    this.reloadRanges();
+  }
+  closeRanges() {
+    this.rangeOpen = false;
+    this.ranges = [];
+    this.rangeParamId = null;
+    this.editingRangeId = null;
+  }
+
+  reloadRanges() {
+    if (!this.rangeParamId) return;
+    this.http
+      .get<RangeRow[]>(`/api/tests/parameters/${this.rangeParamId}/ranges`)
+      .subscribe((res) => (this.ranges = res ?? []));
+  }
+
+  saveRange() {
+    if (!this.rangeParamId) return;
+    const m = this.rangeModel;
+    if (!m.speciesId) {
+      alert('Species is required.');
+      return;
+    }
+    const payload = {
+      testParameterId: this.rangeParamId,
+      speciesId: Number(m.speciesId),
+      ageFromDays: m.ageFromDays != null && m.ageFromDays !== '' ? Number(m.ageFromDays) : null,
+      ageToDays: m.ageToDays != null && m.ageToDays !== '' ? Number(m.ageToDays) : null,
+      low: m.low != null && m.low !== '' ? Number(m.low) : null,
+      high: m.high != null && m.high !== '' ? Number(m.high) : null,
+      note: m.note?.trim() || null,
+      isActive: m.isActive ?? true,
+    };
+    if (this.editingRangeId) {
+      this.http
+        .put(`/api/tests/parameters/${this.rangeParamId}/ranges/${this.editingRangeId}`, payload)
+        .subscribe({
+          next: () => {
+            this.editingRangeId = null;
+            this.rangeModel = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+            this.reloadRanges();
+          },
+          error: (e) => alert(e?.error?.title ?? e?.error ?? 'Update failed'),
+        });
+    } else {
+      this.http
+        .post(`/api/tests/parameters/${this.rangeParamId}/ranges`, payload)
+        .subscribe({
+          next: () => {
+            this.rangeModel = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+            this.reloadRanges();
+          },
+          error: (e) => alert(e?.error?.title ?? e?.error ?? 'Create failed'),
+        });
+    }
+  }
+
+  editRange(r: RangeRow) {
+    this.editingRangeId = r.id;
+    this.rangeModel = {
+      speciesId: r.speciesId,
+      ageFromDays: r.ageFromDays,
+      ageToDays: r.ageToDays,
+      low: r.low,
+      high: r.high,
+      note: r.note || '',
+      isActive: r.isActive,
+    };
+  }
+
+  deleteRange(r: RangeRow) {
+    if (!this.rangeParamId) return;
+    if (!confirm(`Delete this reference range?`)) return;
+    this.http.delete(`/api/tests/parameters/${this.rangeParamId}/ranges/${r.id}`).subscribe({
+      next: () => this.reloadRanges(),
+      error: (e) => alert(e?.error ?? 'Delete failed'),
+    });
+  }
+
+  speciesName(id: number) {
+    return this.speciesList.find((s) => s.id === id)?.name || id;
   }
 }

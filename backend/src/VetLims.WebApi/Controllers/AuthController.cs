@@ -7,6 +7,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using VetLims.Infrastructure;
+using VetLims.Infrastructure.Entities;
 using VetLims.Infrastructure.Identity;
 
 namespace VetLims.WebApi.Controllers
@@ -137,10 +138,17 @@ namespace VetLims.WebApi.Controllers
             // Optional: if you have IsActive on AppUser
             var isActiveProp = user.GetType().GetProperty("IsActive");
             if (isActiveProp != null && isActiveProp.GetValue(user) is bool active && !active)
+            {
+                await RecordLoginAsync(user.Id, false, "User disabled");
                 return Unauthorized("User disabled");
+            }
 
             var pwCheck = await _signIn.CheckPasswordSignInAsync(user, req.Password, lockoutOnFailure: false);
-            if (!pwCheck.Succeeded) return Unauthorized("Invalid credentials");
+            if (!pwCheck.Succeeded)
+            {
+                await RecordLoginAsync(user.Id, false, "Invalid password");
+                return Unauthorized("Invalid credentials");
+            }
 
             // Create JWT
             var claims = new List<Claim>
@@ -188,12 +196,34 @@ namespace VetLims.WebApi.Controllers
                 signingCredentials: creds
             );
 
+            await RecordLoginAsync(user.Id, true);
+
             return Ok(new
             {
                 token = new JwtSecurityTokenHandler().WriteToken(token),
                 clinicId = clinic.Id,
                 branchId = branch?.Id
             });
+        }
+
+        private async Task RecordLoginAsync(int userId, bool success, string? failureReason = null)
+        {
+            try
+            {
+                _db.LoginHistories.Add(new LoginHistory
+                {
+                    UserId = userId,
+                    Success = success,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    UserAgent = Request.Headers["User-Agent"].ToString(),
+                    FailureReason = failureReason
+                });
+                await _db.SaveChangesAsync();
+            }
+            catch
+            {
+                // Login auditing must never break authentication.
+            }
         }
 
         private async Task EnsureDefaultLocationHierarchyAsync()

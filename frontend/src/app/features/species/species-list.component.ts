@@ -29,19 +29,28 @@ import { SpeciesApi, Species } from './species.api';
           <tr>
             <th style="width:110px">Code</th>
             <th>Name</th>
-            <th style="width:160px"></th>
+            <th style="width:120px">Status</th>
+            <th style="width:220px"></th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let s of items()">
             <td>{{ s.code }}</td>
             <td>{{ s.name }}</td>
+            <td>
+              <span
+                class="badge"
+                [class.text-bg-success]="s.isActive"
+                [class.text-bg-secondary]="!s.isActive"
+                >{{ s.isActive ? 'Active' : 'Inactive' }}</span
+              >
+            </td>
             <td class="text-end">
               <button class="btn btn-sm btn-outline-secondary me-1" (click)="openEdit(s)">
                 Edit
               </button>
-              <button class="btn btn-sm btn-outline-danger" (click)="confirmDelete(s)">
-                Delete
+              <button class="btn btn-sm btn-outline-warning" (click)="toggle(s)">
+                {{ s.isActive ? 'Deactivate' : 'Activate' }}
               </button>
             </td>
           </tr>
@@ -181,11 +190,11 @@ export class SpeciesListComponent {
     });
   }
 
-  confirmDelete(s: Species) {
-    if (!confirm(`Delete species "${s.name}"?`)) return;
-    this.api.delete(s.id).subscribe({
+  toggle(s: Species) {
+    const newVal = !s.isActive;
+    this.api.toggleStatus(s.id, newVal).subscribe({
       next: (_) => this.reload(),
-      error: (err) => this.error.set(err.error ?? 'Delete failed'),
+      error: (err) => this.error.set(err.error ?? 'Toggle failed'),
     });
   }
 }

@@ -8,7 +8,7 @@ using VetLims.Infrastructure.Entities;
 //public record ListQuery(int? Page, int? PageSize, string? Search, string? SortBy, bool? Desc);
 
 // Species
-public record SpeciesDto(int Id, string Code, string Name);
+public record SpeciesDto(int Id, string Code, string Name, bool IsActive);
 public record SpeciesCreateDto(string Code, string Name);
 public record SpeciesUpdateDto(string Code, string Name);
 
@@ -96,9 +96,9 @@ public record LaboratoryGroupCreateDto(string Code, string Name, string? Descrip
 public record LaboratoryGroupUpdateDto(string Code, string Name, string? Description, bool IsActive = true);
 public record LaboratoryGroupClinicDto(int Id, int OrganizationId, string Code, string Name, string? ShortName, bool IsActive, int? LaboratoryGroupId);
 
-public record ClinicDto(int Id, int OrganizationId, string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive);
-public record ClinicCreateDto(string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive = true, int? OrganizationId = null);
-public record ClinicUpdateDto(string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive = true, int? OrganizationId = null);
+public record ClinicDto(int Id, int OrganizationId, int? LaboratoryGroupId, string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive);
+public record ClinicCreateDto(string Code, string Name, int? LaboratoryGroupId = null, string? Logo = null, string? Address = null, string? Phone = null, string? Email = null, string? Gst = null, string? RegistrationNumber = null, string? WhatsAppNumber = null, string? ReportHeader = null, string? ReportFooter = null, string? DigitalSignature = null, bool IsActive = true, int? OrganizationId = null);
+public record ClinicUpdateDto(string Code, string Name, int? LaboratoryGroupId = null, string? Logo = null, string? Address = null, string? Phone = null, string? Email = null, string? Gst = null, string? RegistrationNumber = null, string? WhatsAppNumber = null, string? ReportHeader = null, string? ReportFooter = null, string? DigitalSignature = null, bool IsActive = true, int? OrganizationId = null);
 
 public record BranchDto(int Id, int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive);
 public record BranchCreateDto(int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
@@ -156,15 +156,15 @@ public enum PackageItemTypeDto { Test = 1, Profile = 2 } // UI-facing enum (opti
 public record PackageItemDto(int Id, int PackageId, PackageItemTypeDto ItemType, int ItemId, int DisplayOrder);
 public record PackageItemCreateDto(int PackageId, PackageItemTypeDto ItemType, int ItemId, int DisplayOrder);
 public record PackageItemUpdateDto(PackageItemTypeDto ItemType, int ItemId, int DisplayOrder);
-// Rate
-public record RateDto(int Id, int? ClientId, RegItemType ItemType, int ItemId, decimal Price, string Currency, bool IsActive);
-public record RateCreateDto(int? ClientId, RegItemType ItemType, int ItemId, decimal Price, string Currency = "AED", bool IsActive = true);
-public record RateUpdateDto(int? ClientId, RegItemType ItemType, int ItemId, decimal Price, string Currency = "AED", bool IsActive = true);
 
 //Client Rate
-public record ClientRateDto(int Id, int ClientId, int ItemId, RegItemType ItemType, decimal Rate, string? Currency, bool IsActive);
-public record ClientRateCreateDto(int ClientId, int ItemId, RegItemType ItemType, decimal Rate, string? Currency, bool IsActive);
-public record ClientRateUpdateDto(int ItemId, RegItemType ItemType, decimal Rate, string? Currency, bool IsActive);
+public record ClientRateDto(int Id, int ClientId, int ItemId, RegItemType ItemType, decimal Rate, decimal VatRate, string? Currency, bool IsActive);
+public record ClientRateCreateDto(int ClientId, int ItemId, RegItemType ItemType, decimal Rate, decimal VatRate, string? Currency, bool IsActive);
+public record ClientRateUpdateDto(int ItemId, RegItemType ItemType, decimal Rate, decimal VatRate, string? Currency, bool IsActive);
+
+public record ClientRateBulkItemDto(RegItemType ItemType, int ItemId, decimal? Rate, decimal VatRate, string? Currency, bool IsActive);
+public record ClientRateBulkDto(int ClientId, List<ClientRateBulkItemDto> Items);
+public record ClientRateBulkResultDto(int Created, int Updated, int Removed);
 
 // Query helpers
 // public record ListQuery(int Page = 1, int PageSize = 20, string? Search = null, int? ClientId = null, int? SpeciesId = null);
@@ -183,7 +183,8 @@ public record RegistrationCreateDto(
     int? BranchId = null,
     decimal? InitialPaymentAmount = null,
     PaymentMethod? InitialPaymentMethod = null,
-    string? InitialPaymentRef = null
+    string? InitialPaymentRef = null,
+    string? OwnerMobile = null
 );
 
 public record RegistrationDto(
@@ -197,11 +198,13 @@ public record RegistrationDto(
     string? ClinicalNotes,
     DateTime CreatedAt,
     decimal TotalAmount,
+    decimal TotalVat,
     decimal PaidAmount,
-    decimal Balance
+    decimal Balance,
+    string? OwnerMobile = null
 );
 
-public record RegistrationAnimalDto(int SpeciesId, string? AnimalName, int? AnimalId = null);
+public record RegistrationAnimalDto(int SpeciesId, string? AnimalName, int? AnimalId = null, int? AgeInDays = null);
 
 public record RegistrationItemCreateDto(RegItemType ItemType, int ItemId, int? SpeciesId, int? SampleTypeId = null);
 
@@ -216,14 +219,16 @@ public record RegistrationDetailDto(
     string? ClinicalNotes,
     DateTime CreatedAt,
     decimal TotalAmount,
+    decimal TotalVat,
     decimal PaidAmount,
     decimal Balance,
     IEnumerable<RegistrationAnimalView> Animals,
     IEnumerable<RegistrationItemView> Items,
-    IEnumerable<PaymentView> Payments
+    IEnumerable<PaymentView> Payments,
+    string? OwnerMobile = null
 );
 
-public record RegistrationAnimalView(int Id, int SpeciesId, string? AnimalName, int? AnimalId);
+public record RegistrationAnimalView(int Id, int SpeciesId, string? AnimalName, int? AnimalId, int? AgeInDays = null);
 public record RegistrationItemView(
     int Id,
     RegItemType ItemType,
@@ -231,13 +236,16 @@ public record RegistrationItemView(
     int? SpeciesId,
     int? SampleTypeId,
     decimal Price,
+    decimal VatRate,
+    decimal VatAmount,
     string ItemBarcode,
     string Status,
     string SampleStatus,
     DateTime? SampleCollectedAt,
     DateTime? SampleReceivedAt,
     DateTime? SampleProcessedAt,
-    string? SampleNotes
+    string? SampleNotes,
+    int Quantity = 1
 );
 public record PaymentView(int Id, PaymentMethod Method, decimal Amount, DateTime PaidAt, string? Reference, string Currency);
 
@@ -257,7 +265,10 @@ public record ResultWorkItemDto(
     int? SampleTypeId,
     string SampleStatus,
     bool TechnicianVerified,
-    bool PathologistAuthenticated
+    bool PathologistAuthenticated,
+    string? AnimalNames = null,
+    int AnimalCount = 0,
+    string? OwnerMobile = null
 );
 
 public record ResultValueDto(
@@ -292,7 +303,10 @@ public record ResultDetailDto(
     DateTime? PathologistAuthenticatedAt,
     string? DigitalSignature,
     string? VerificationRemarks,
-    IEnumerable<ResultValueDto> Values
+    IEnumerable<ResultValueDto> Values,
+    string? OwnerName = null,
+    string? AnimalNames = null,
+    int AnimalCount = 0
 );
 
 // payload to save values

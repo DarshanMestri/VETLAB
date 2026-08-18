@@ -138,10 +138,6 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
         if (await db.BranchTests.AnyAsync(x => x.BranchId == branchId && x.TestId == testId && !x.IsDeleted))
             return Conflict("Test is already assigned to this branch.");
 
-        var allowed = await TestBranchAvailabilityService.CanUseTestAtBranchAsync(db, testId, branchId, organizationId.Value);
-        if (!allowed)
-            return BadRequest("The selected Test is not enabled for this Branch.");
-
         var assignment = new BranchTest
         {
             BranchId = branchId,

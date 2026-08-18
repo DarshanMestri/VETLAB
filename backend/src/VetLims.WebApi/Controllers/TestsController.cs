@@ -189,24 +189,6 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
         return new TestDto(e.Id, e.Name, e.DisplayName, e.Code, e.DepartmentId, e.UnitId, e.ValueType, e.IsActive);
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteTest(int id)
-    {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
-        if (!organizationId.HasValue)
-            return Forbid();
-
-        var e = await ResolveTestForCurrentOrganizationAsync(id, organizationId.Value);
-        if (e is null) return NotFound();
-
-        e.IsDeleted = true;
-        e.DeletedDate = DateTime.UtcNow;
-        e.DeletedBy = currentUserService.UserName ?? "system";
-        e.IsActive = false;
-        await db.SaveChangesAsync();
-        return NoContent();
-    }
-
     [HttpPatch("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] bool isActive)
     {
@@ -253,9 +235,25 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
             return NotFound("Test not found.");
 
         if (testId != dto.TestId) return BadRequest("Mismatched testId.");
-        var e = new TestParameter { TestId = dto.TestId, Name = dto.Name.Trim(), UnitId = dto.UnitId, SortOrder = dto.SortOrder, IsActive = dto.IsActive };
+
+        var trimmedName = dto.Name.Trim();
+        if (await db.TestParameters.AnyAsync(p => p.TestId == testId && p.Name == trimmedName && !p.IsDeleted))
+            return Conflict("A parameter with this name already exists for this test.");
+
+        var e = new TestParameter { TestId = dto.TestId, Name = trimmedName, UnitId = dto.UnitId, SortOrder = dto.SortOrder, IsActive = dto.IsActive };
         db.TestParameters.Add(e);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            var inner = ex.InnerException?.Message ?? string.Empty;
+            if (inner.Contains("unique", StringComparison.OrdinalIgnoreCase)
+                || inner.Contains("IX_test_parameters", StringComparison.OrdinalIgnoreCase))
+                return Conflict("A parameter with this name already exists for this test.");
+            return Problem(detail: "Unable to save parameter.", statusCode: 500);
+        }
         return CreatedAtAction(nameof(GetParameter), new { testId, paramId = e.Id }, new TestParameterDto(e.Id, e.TestId, e.Name, e.UnitId, e.SortOrder, e.IsActive));
     }
 
@@ -294,6 +292,10 @@ public class TestsController(VetLimsDbContext db, ICurrentUserService currentUse
         p.UnitId = dto.UnitId;
         p.SortOrder = dto.SortOrder;
         p.IsActive = dto.IsActive;
+
+        if (await db.TestParameters.AnyAsync(x => x.TestId == testId && x.Id != paramId && x.Name == p.Name && !x.IsDeleted))
+            return Conflict("A parameter with this name already exists for this test.");
+
         await db.SaveChangesAsync();
         return new TestParameterDto(p.Id, p.TestId, p.Name, p.UnitId, p.SortOrder, p.IsActive);
     }

@@ -23,7 +23,7 @@ public class ClientRateController(VetLimsDbContext db) : ControllerBase
 
         var items = await q
             .OrderBy(r => r.ItemType).ThenBy(r => r.ItemId)
-            .Select(r => new ClientRateDto(r.Id, r.ClientId, r.ItemId, r.ItemType, r.Rate, r.Currency, r.IsActive))
+            .Select(r => new ClientRateDto(r.Id, r.ClientId, r.ItemId, r.ItemType, r.Rate, r.VatRate, r.Currency, r.IsActive))
             .ToListAsync();
 
         return Ok(items);
@@ -42,6 +42,7 @@ public class ClientRateController(VetLimsDbContext db) : ControllerBase
             ItemId = dto.ItemId,
             ItemType = dto.ItemType,
             Rate = dto.Rate,
+            VatRate = dto.VatRate,
             Currency = dto.Currency,
             IsActive = dto.IsActive
         };
@@ -49,7 +50,7 @@ public class ClientRateController(VetLimsDbContext db) : ControllerBase
         await db.SaveChangesAsync();
 
         return CreatedAtAction(nameof(Get), new { id = e.Id },
-            new ClientRateDto(e.Id, e.ClientId, e.ItemId, e.ItemType, e.Rate, e.Currency, e.IsActive));
+            new ClientRateDto(e.Id, e.ClientId, e.ItemId, e.ItemType, e.Rate, e.VatRate, e.Currency, e.IsActive));
     }
 
     [HttpGet("{id:int}")]
@@ -57,7 +58,70 @@ public class ClientRateController(VetLimsDbContext db) : ControllerBase
     {
         var e = await db.ClientRates.FindAsync(id);
         if (e is null) return NotFound();
-        return new ClientRateDto(e.Id, e.ClientId, e.ItemId, e.ItemType, e.Rate, e.Currency, e.IsActive);
+        return new ClientRateDto(e.Id, e.ClientId, e.ItemId, e.ItemType, e.Rate, e.VatRate, e.Currency, e.IsActive);
+    }
+
+    // PUT api/clientrate/bulk
+    // Body: { clientId, items: [{ itemType, itemId, rate, currency, isActive }] }
+    // rate == null removes the existing price for (client, item); rate != null upserts it.
+    [HttpPut("bulk")]
+    public async Task<ActionResult<ClientRateBulkResultDto>> BulkUpsert([FromBody] ClientRateBulkDto dto)
+    {
+        if (dto.ClientId <= 0) return BadRequest("clientId is required.");
+        if (dto.Items.Count > 1000) return BadRequest("Too many items in a single request.");
+
+        var clientExists = await db.Clients.AnyAsync(c => c.Id == dto.ClientId && !c.IsDeleted);
+        if (!clientExists) return BadRequest("Client does not exist.");
+
+        int created = 0, updated = 0, removed = 0;
+
+        foreach (var item in dto.Items)
+        {
+            if (item.ItemId <= 0 || !Enum.IsDefined(typeof(RegItemType), item.ItemType))
+                continue;
+
+            if (item.Rate is null)
+            {
+                var existing = await db.ClientRates.FirstOrDefaultAsync(r =>
+                    r.ClientId == dto.ClientId && r.ItemType == item.ItemType && r.ItemId == item.ItemId);
+                if (existing is not null)
+                {
+                    db.ClientRates.Remove(existing);
+                    removed++;
+                }
+                continue;
+            }
+
+            var entity = await db.ClientRates.FirstOrDefaultAsync(r =>
+                r.ClientId == dto.ClientId && r.ItemType == item.ItemType && r.ItemId == item.ItemId);
+
+            if (entity is null)
+            {
+                db.ClientRates.Add(new ClientRate
+                {
+                    ClientId = dto.ClientId,
+                    ItemType = item.ItemType,
+                    ItemId = item.ItemId,
+                    Rate = item.Rate.Value,
+                    VatRate = item.VatRate,
+                    Currency = item.Currency ?? "AED",
+                    IsActive = item.IsActive
+                });
+                created++;
+            }
+            else
+            {
+                entity.Rate = item.Rate.Value;
+                entity.VatRate = item.VatRate;
+                entity.Currency = item.Currency ?? entity.Currency;
+                entity.IsActive = item.IsActive;
+                entity.UpdatedAt = DateTime.UtcNow;
+                updated++;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return Ok(new ClientRateBulkResultDto(created, updated, removed));
     }
 
     [HttpPut("{id:int}")]
@@ -73,12 +137,13 @@ public class ClientRateController(VetLimsDbContext db) : ControllerBase
         e.ItemId = dto.ItemId;
         e.ItemType = dto.ItemType;
         e.Rate = dto.Rate;
+        e.VatRate = dto.VatRate;
         e.Currency = dto.Currency;
         e.IsActive = dto.IsActive;
         e.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
-        return new ClientRateDto(e.Id, e.ClientId, e.ItemId, e.ItemType, e.Rate, e.Currency, e.IsActive);
+        return new ClientRateDto(e.Id, e.ClientId, e.ItemId, e.ItemType, e.Rate, e.VatRate, e.Currency, e.IsActive);
     }
 
     [HttpDelete("{id:int}")]

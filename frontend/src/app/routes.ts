@@ -185,6 +185,36 @@ export const routes: Routes = [
   },
 
   {
+    path: 'laboratory-master',
+    loadComponent: () =>
+      import('./features/laboratory-master/laboratory-master.component').then(
+        (m) => m.LaboratoryMasterComponent,
+      ),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
+  },
+
+  {
+    path: 'laboratories',
+    loadComponent: () =>
+      import('./features/laboratories/laboratories-list.component').then(
+        (m) => m.LaboratoriesListComponent,
+      ),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
+  },
+
+  {
+    path: 'user-hierarchy',
+    loadComponent: () =>
+      import('./features/user-hierarchy/user-hierarchy.component').then(
+        (m) => m.UserHierarchyComponent,
+      ),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
+  },
+
+  {
     path: 'whatsapp',
     loadComponent: () =>
       import('./features/whatsapp/whatsapp-management.component').then(

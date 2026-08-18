@@ -11,11 +11,18 @@ public class PricingService
 
     public async Task<decimal> ResolvePriceAsync(int? clientId, RegItemType type, int itemId, CancellationToken ct = default)
     {
-        var price = await _db.ClientRates.AsNoTracking()
+        var (price, _) = await ResolvePricingAsync(clientId, type, itemId, ct);
+        return price;
+    }
+
+    public async Task<(decimal Price, decimal VatRate)> ResolvePricingAsync(int? clientId, RegItemType type, int itemId, CancellationToken ct = default)
+    {
+        var rate = await _db.ClientRates.AsNoTracking()
             .Where(r => r.ItemType == type && r.ItemId == itemId && r.ClientId == clientId)
-            .Select(r => r.Rate)
+            .Select(r => new { r.Rate, r.VatRate })
             .FirstOrDefaultAsync(ct);
 
-        return price > 0 ? price : 0;
+        var price = rate?.Rate > 0 ? rate.Rate : 0;
+        return (price, rate?.VatRate ?? 0m);
     }
 }
