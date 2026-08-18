@@ -161,6 +161,15 @@ export const routes: Routes = [
   },
 
   {
+    path: 'registrations/:id',
+    loadComponent: () =>
+      import('./features/registrations/registration-form.component').then(
+        (m) => m.RegistrationFormComponent,
+      ),
+    canActivate: [authGuard],
+  },
+
+  {
     path: 'results',
     loadComponent: () =>
       import('./features/results/results-worklist.component').then(

@@ -10,6 +10,8 @@ public class ListQuery
     public string? Search { get; set; }            // optional search text
     public int? ClientId { get; set; }             // optional filters (used where applicable)
     public int? SpeciesId { get; set; }
+    public DateTime? DateFrom { get; set; }         // date range filters
+    public DateTime? DateTo { get; set; }
 }
 
 /// <summary>

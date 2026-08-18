@@ -3246,6 +3246,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("OwnerNameAr")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("PaidAmount")
                         .HasColumnType("numeric");
 

@@ -47,6 +47,8 @@ public class RegistrationsController : ControllerBase
         {
             query = query.Where(reg => reg.Animals.Any(a => a.SpeciesId == q.SpeciesId.Value));
         }
+        if (q.DateFrom.HasValue) query = query.Where(x => x.CreatedAt >= q.DateFrom.Value);
+        if (q.DateTo.HasValue) query = query.Where(x => x.CreatedAt <= q.DateTo.Value.AddDays(1).AddTicks(-1));
 
         var total = await query.CountAsync();
         var items = await query.OrderByDescending(x => x.Id)
@@ -54,6 +56,7 @@ public class RegistrationsController : ControllerBase
             .Select(x => new RegistrationDto(
                 x.Id,
                 x.OwnerName,
+                x.OwnerNameAr,
                 x.ClientId,
                 x.OwnerId,
                 x.DoctorId,
@@ -119,11 +122,14 @@ public class RegistrationsController : ControllerBase
 
         var ownerMobile = owner?.Mobile ?? dto.OwnerMobile?.Trim();
 
+        var ownerNameAr = owner?.NameAr ?? dto.OwnerNameAr?.Trim();
+
         var reg = new Registration
         {
            ClinicId = branch.ClinicId,
            BranchId = branch.Id,
            OwnerName = ownerName,
+           OwnerNameAr = ownerNameAr,
            OwnerMobile = ownerMobile,
            ClientId = dto.ClientId,
            OwnerId = dto.OwnerId,
@@ -273,13 +279,188 @@ public class RegistrationsController : ControllerBase
         return d is null ? NotFound() : Ok(d);
     }
 
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<RegistrationDetailDto>> Update(int id, [FromBody] RegistrationCreateDto dto)
+    {
+        var reg = await _db.Registrations
+            .Include(x => x.Animals)
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == id);
+        if (reg is null) return NotFound();
+
+        var organizationId = _currentUserService.OrganizationId;
+        if (!organizationId.HasValue) return Forbid();
+
+        var branchId = dto.BranchId ?? _currentUserService.BranchId;
+        if (!branchId.HasValue) return BadRequest("Branch selection is required.");
+
+        var branch = await _db.Branches.Include(x => x.Clinic)
+            .FirstOrDefaultAsync(x => x.Id == branchId.Value && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
+        if (branch is null) return BadRequest("Selected branch is not available for your organization.");
+
+        if (dto.Animals.Count == 0)
+            return BadRequest("At least one animal is required.");
+        if (dto.Items.Count == 0)
+            return BadRequest("At least one test order is required.");
+
+        Owner? owner = null;
+        if (dto.OwnerId.HasValue)
+        {
+            owner = await _db.Owners.FirstOrDefaultAsync(x => x.Id == dto.OwnerId.Value && x.IsActive);
+            if (owner is null) return BadRequest("Selected owner was not found.");
+        }
+
+        if (dto.DoctorId.HasValue)
+        {
+            var doctorExists = await _db.Doctors.AnyAsync(x => x.Id == dto.DoctorId.Value && x.IsActive);
+            if (!doctorExists) return BadRequest("Selected doctor was not found.");
+        }
+
+        var ownerName = owner?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(ownerName))
+            ownerName = dto.OwnerName.Trim();
+        if (string.IsNullOrWhiteSpace(ownerName))
+            return BadRequest("Owner name is required.");
+
+        var ownerMobile = owner?.Mobile ?? dto.OwnerMobile?.Trim();
+
+        var ownerNameAr = owner?.NameAr ?? dto.OwnerNameAr?.Trim();
+
+        // Update registration header
+        reg.ClinicId = branch.ClinicId;
+        reg.BranchId = branch.Id;
+        reg.OwnerName = ownerName;
+        reg.OwnerNameAr = ownerNameAr;
+        reg.OwnerMobile = ownerMobile;
+        reg.ClientId = dto.ClientId;
+        reg.OwnerId = dto.OwnerId;
+        reg.DoctorId = dto.DoctorId;
+        reg.ReferenceNumber = dto.ReferenceNumber?.Trim();
+        reg.ClinicalNotes = dto.ClinicalNotes?.Trim();
+        reg.AgeValue = dto.AgeValue;
+        reg.AgeUnit = dto.AgeUnit;
+
+        // Normalize registration-level age to days
+        int? regAgeInDays = null;
+        if (dto.AgeValue.HasValue && dto.AgeUnit.HasValue)
+        {
+            regAgeInDays = dto.AgeUnit.Value switch
+            {
+                AgeUnit.Days => dto.AgeValue.Value,
+                AgeUnit.Months => dto.AgeValue.Value * 30,
+                AgeUnit.Years => dto.AgeValue.Value * 365,
+                _ => dto.AgeValue.Value
+            };
+        }
+
+        // Clear existing animals and items
+        reg.Animals.Clear();
+        reg.Items.Clear();
+        await _db.SaveChangesAsync(); // Force delete existing
+
+        // Re-add animals
+        foreach (var a in dto.Animals)
+        {
+            Animal? animal = null;
+            if (a.AnimalId.HasValue)
+            {
+                animal = await _db.Animals.FirstOrDefaultAsync(x => x.Id == a.AnimalId.Value);
+                if (animal is null) return BadRequest($"Selected animal was not found: {a.AnimalId.Value}");
+                if (dto.OwnerId.HasValue && animal.OwnerId != dto.OwnerId.Value)
+                    return BadRequest("Selected animal does not belong to the selected owner.");
+            }
+
+            var speciesId = animal?.SpeciesId ?? a.SpeciesId;
+            var animalName = animal?.Name?.Trim() ?? a.AnimalName?.Trim();
+            if (string.IsNullOrWhiteSpace(animalName))
+                return BadRequest("Animal name is required.");
+
+            reg.Animals.Add(new RegistrationAnimal
+            {
+                AnimalId = a.AnimalId,
+                SpeciesId = speciesId,
+                AnimalName = animalName,
+                AgeInDays = regAgeInDays
+            });
+        }
+
+        // Re-add items with pricing
+        decimal totalNet = 0, totalVat = 0;
+        foreach (var it in dto.Items)
+        {
+            if (it.SampleTypeId.HasValue)
+            {
+                var sampleTypeExists = await _db.SampleTypes.AnyAsync(x => x.Id == it.SampleTypeId.Value && x.IsActive);
+                if (!sampleTypeExists) return BadRequest($"Selected sample type was not found: {it.SampleTypeId.Value}");
+            }
+
+            if (it.ItemType == RegItemType.Test)
+            {
+                var (isAllowed, error) = await TestBranchAvailabilityService.ValidateTestUseAsync(_db, it.ItemId, branch.Id, organizationId.Value);
+                if (!isAllowed)
+                    return BadRequest(error ?? "The selected Test is not enabled for this Branch.");
+            }
+
+            var quantity = it.SpeciesId.HasValue
+                ? reg.Animals.Count(a => a.SpeciesId == it.SpeciesId.Value)
+                : reg.Animals.Count;
+
+            var (price, vatRate) = await _pricing.ResolvePricingAsync(dto.ClientId, it.ItemType, it.ItemId);
+            var unitVat = price > 0 ? decimal.Round(price * vatRate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
+            var item = new RegistrationItem
+            {
+                ClinicId = branch.ClinicId,
+                BranchId = branch.Id,
+                ItemType = it.ItemType,
+                ItemId = it.ItemId,
+                SpeciesId = it.SpeciesId,
+                SampleTypeId = it.SampleTypeId,
+                Price = price,
+                Quantity = quantity,
+                VatRate = vatRate,
+                VatAmount = unitVat * quantity,
+                ItemBarcode = await _barcodes.NextAsync("IT")
+            };
+            reg.Items.Add(item);
+            totalNet += price * quantity;
+            totalVat += unitVat * quantity;
+        }
+
+        // Discount calculation
+        decimal subtotalPlusVat = totalNet + totalVat;
+        decimal discountAmount = 0m;
+        if (dto.DiscountType.HasValue && dto.DiscountValue > 0)
+        {
+            if (dto.DiscountType == DiscountType.Percentage)
+            {
+                if (dto.DiscountValue > 100) return BadRequest("Discount percentage cannot exceed 100%.");
+                discountAmount = decimal.Round(subtotalPlusVat * dto.DiscountValue / 100m, 2, MidpointRounding.AwayFromZero);
+            }
+            else if (dto.DiscountType == DiscountType.Amount)
+            {
+                if (dto.DiscountValue > subtotalPlusVat) return BadRequest("Discount amount cannot exceed the subtotal.");
+                discountAmount = decimal.Round(dto.DiscountValue, 2, MidpointRounding.AwayFromZero);
+            }
+            if (discountAmount < 0) return BadRequest("Discount cannot be negative.");
+        }
+
+        reg.DiscountType = dto.DiscountType;
+        reg.DiscountValue = decimal.Round(dto.DiscountValue, 2, MidpointRounding.AwayFromZero);
+        reg.DiscountAmount = discountAmount;
+        reg.TotalAmount = decimal.Round(subtotalPlusVat - discountAmount, 2, MidpointRounding.AwayFromZero);
+        reg.TotalVat = decimal.Round(totalVat, 2, MidpointRounding.AwayFromZero);
+
+        await _db.SaveChangesAsync();
+        return Ok(await ProjectDetail(reg.Id));
+    }
+
     [HttpGet("lookups")]
     public async Task<ActionResult<object>> GetLookups()
     {
         var owners = await _db.Owners.AsNoTracking()
             .Where(x => x.IsActive)
             .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, OwnerCode = x.Code, x.Name, x.Mobile })
+            .Select(x => new { x.Id, OwnerCode = x.Code, x.Name, x.NameAr, x.Mobile })
             .ToListAsync();
 
         var animals = await _db.Animals.AsNoTracking()
@@ -471,6 +652,7 @@ public class RegistrationsController : ControllerBase
             .Select(r => new RegistrationDetailDto(
                 r.Id,
                 r.OwnerName,
+                r.OwnerNameAr,
                 r.ClientId,
                 r.OwnerId,
                 r.DoctorId,

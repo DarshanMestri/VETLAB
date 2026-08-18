@@ -173,13 +173,14 @@ public record ClientRateBulkResultDto(int Created, int Updated, int Removed);
 // Create a registration with animals + items
 public record RegistrationCreateDto(
     string OwnerName,
-    int? ClientId,
-    int? OwnerId,
-    int? DoctorId,
-    string? ReferenceNumber,
-    string? ClinicalNotes,
-    List<RegistrationAnimalDto> Animals,
-    List<RegistrationItemCreateDto> Items,
+    string? OwnerNameAr = null,
+    int? ClientId = null,
+    int? OwnerId = null,
+    int? DoctorId = null,
+    string? ReferenceNumber = null,
+    string? ClinicalNotes = null,
+    List<RegistrationAnimalDto> Animals = null!,
+    List<RegistrationItemCreateDto> Items = null!,
     int? BranchId = null,
     decimal? InitialPaymentAmount = null,
     PaymentMethod? InitialPaymentMethod = null,
@@ -194,6 +195,7 @@ public record RegistrationCreateDto(
 public record RegistrationDto(
     int Id,
     string OwnerName,
+    string? OwnerNameAr,
     int? ClientId,
     int? OwnerId,
     int? DoctorId,
@@ -220,6 +222,7 @@ public record RegistrationItemCreateDto(RegItemType ItemType, int ItemId, int? S
 public record RegistrationDetailDto(
     int Id,
     string OwnerName,
+    string? OwnerNameAr,
     int? ClientId,
     int? OwnerId,
     int? DoctorId,

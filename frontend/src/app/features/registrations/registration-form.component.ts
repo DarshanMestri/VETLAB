@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 enum RegItemType {
   Test = 1,
@@ -29,7 +29,7 @@ enum AgeUnit {
 
 type Species = { id: number; name: string; code?: string };
 type Client = { id: number; name: string; code?: string };
-type OwnerOption = { id: number; ownerCode?: string; name: string; mobile?: string };
+type OwnerOption = { id: number; ownerCode?: string; name: string; nameAr?: string; mobile?: string };
 type AnimalOption = { id: number; ownerId: number; animalCode?: string; name: string; speciesId: number };
 type DoctorOption = { id: number; code?: string; name: string };
 type SampleTypeOption = { id: number; code?: string; name: string };
@@ -55,6 +55,7 @@ type LookupResponse = {
 
 type CreateDto = {
   ownerName: string;
+  ownerNameAr?: string | null;
   ownerMobile?: string | null;
   clientId?: number | null;
   ownerId?: number | null;
@@ -86,14 +87,14 @@ type CreateDto = {
       <!-- Header -->
       <div class="reg-header">
         <div>
-          <h2 class="reg-title">Laboratory Registration</h2>
-          <p class="reg-subtitle">Create a new patient registration order.</p>
+          <h2 class="reg-title">{{ editMode ? 'Edit Registration' : 'Laboratory Registration' }}</h2>
+          <p class="reg-subtitle">{{ editMode ? 'Update an existing patient registration order.' : 'Create a new patient registration order.' }}</p>
         </div>
         <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" routerLink="/registrations">Back</a>
           <button class="btn btn-outline-secondary btn-sm" type="button" (click)="resetForm()">Clear</button>
           <button class="btn btn-primary btn-sm" type="button" (click)="save()" [disabled]="saving">
-            {{ saving ? 'Saving...' : 'Save Registration' }}
+            {{ saving ? 'Saving...' : (editMode ? 'Update Registration' : 'Save Registration') }}
           </button>
         </div>
       </div>
@@ -119,7 +120,8 @@ type CreateDto = {
                 placeholder="Type name or mobile..."
                 autocomplete="off"
               />
-              <div class="form-text">Min 2 characters for search.</div>
+              <div class="form-text" *ngIf="ownerSearchLoading">Searching...</div>
+              <div class="form-text" *ngIf="!ownerSearchLoading">Min 2 characters for search.</div>
               <div class="owner-results" *ngIf="ownerSearchResults.length > 0">
                 <button type="button" class="owner-result-item"
                         *ngFor="let o of ownerSearchResults"
@@ -134,6 +136,10 @@ type CreateDto = {
             <div class="mb-3">
               <label class="form-label fw-semibold">Owner Name</label>
               <input class="form-control" [(ngModel)]="model.ownerName" name="ownerName" placeholder="Owner name" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Owner Name (Arabic)</label>
+              <input class="form-control" dir="rtl" lang="ar" [(ngModel)]="model.ownerNameAr" name="ownerNameAr" placeholder="&#1575;&#1604;&#1573;&#1587;&#1605;" />
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">Mobile</label>
@@ -406,6 +412,8 @@ type CreateDto = {
               <div class="col-md-4">
                 <div class="summary-label">Owner</div>
                 <div class="summary-value">{{ model.ownerName || '(not set)' }}</div>
+                <div class="summary-label" *ngIf="model.ownerNameAr">Name (Arabic)</div>
+                <div class="summary-value" *ngIf="model.ownerNameAr" dir="rtl">{{ model.ownerNameAr }}</div>
                 <div class="summary-label">Mobile</div>
                 <div class="summary-value-last">{{ model.ownerMobile || '-' }}</div>
               </div>
@@ -544,6 +552,10 @@ type CreateDto = {
 export class RegistrationFormComponent {
   private http = inject(HttpClient);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
+
+  editMode = false;
+  editId: number | null = null;
 
   readonly DiscountType = DiscountType;
   readonly regItemType = RegItemType;
@@ -685,7 +697,55 @@ export class RegistrationFormComponent {
   // --- Lifecycle ---
 
   ngOnInit() {
-    this.loadLookups();
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id && id !== 'new') {
+      this.editMode = true;
+      this.editId = Number(id);
+      this.loadRegistrationForEdit();
+    } else {
+      this.loadLookups();
+    }
+  }
+
+  private loadRegistrationForEdit() {
+    this.http.get<any>(`/api/registrations/${this.editId}`).subscribe({
+      next: (reg) => {
+        this.model.ownerName = reg.ownerName ?? '';
+        this.model.ownerNameAr = reg.ownerNameAr ?? '';
+        this.model.ownerMobile = reg.ownerMobile ?? '';
+        this.model.clientId = reg.clientId ?? null;
+        this.model.ownerId = reg.ownerId ?? null;
+        this.model.doctorId = reg.doctorId ?? null;
+        this.model.referenceNumber = reg.referenceNumber ?? '';
+        this.model.clinicalNotes = reg.clinicalNotes ?? '';
+        this.model.ageValue = reg.ageValue ?? null;
+        this.ageValue = reg.ageValue ?? null;
+        this.ageUnit = reg.ageUnit ?? AgeUnit.Years;
+        this.discountType = reg.discountType ?? null;
+        this.discountValue = reg.discountValue ?? null;
+
+        if (reg.animals?.length) {
+          this.model.animals = reg.animals.map((a: any) => ({
+            speciesId: a.speciesId,
+            animalName: a.animalName,
+            animalId: a.animalId,
+          }));
+        }
+        if (reg.items?.length) {
+          this.model.items = reg.items.map((i: any) => ({
+            itemType: i.itemType,
+            itemId: i.itemId,
+            speciesId: i.speciesId,
+            sampleTypeId: i.sampleTypeId,
+          }));
+        }
+
+        this.loadLookups();
+      },
+      error: () => {
+        this.errorMessage = 'Failed to load registration for editing.';
+      },
+    });
   }
 
   // --- Data Loading ---
@@ -704,9 +764,10 @@ export class RegistrationFormComponent {
 
   // --- Owner Search (Server-side typeahead) ---
 
+  private lastSelectedOwnerName = '';
+
   onOwnerSearchInput(term: string) {
     this.ownerSearch = term;
-    this.model.ownerId = null;
 
     if (this.ownerSearchTimer) {
       clearTimeout(this.ownerSearchTimer);
@@ -740,8 +801,10 @@ export class RegistrationFormComponent {
   selectOwnerFromSearch(owner: OwnerOption) {
     this.model.ownerId = owner.id;
     this.model.ownerName = owner.name;
+    this.model.ownerNameAr = owner.nameAr ?? '';
     this.model.ownerMobile = owner.mobile ?? '';
     this.ownerSearch = owner.name;
+    this.lastSelectedOwnerName = owner.name;
     this.ownerSearchResults = [];
   }
 
@@ -768,9 +831,11 @@ export class RegistrationFormComponent {
     const speciesId = this.speciesDropdownId;
     const count = this.speciesCount;
     if (!speciesId || !count || count < 1) return;
+    const sp = this.species.find((s) => s.id === speciesId);
+    const speciesName = sp?.name ?? 'Animal';
     const existing = this.model.animals.filter((animal) => animal.speciesId === speciesId).length;
     for (let i = 1; i <= count; i++) {
-      this.model.animals.push({ speciesId, animalName: String(existing + i), animalId: null });
+      this.model.animals.push({ speciesId, animalName: `${speciesName} ${existing + i}`, animalId: null });
     }
     this.speciesDropdownId = null;
     this.speciesCount = 1;
@@ -779,6 +844,11 @@ export class RegistrationFormComponent {
   addExistingAnimal() {
     const animal = this.animals.find((entry) => entry.id === this.quickAnimalId);
     if (!animal) return;
+    const alreadyAdded = this.model.animals.some((a) => a.animalId === animal.id);
+    if (alreadyAdded) {
+      alert('This animal is already added to the registration.');
+      return;
+    }
     this.model.animals.push({ speciesId: animal.speciesId, animalName: animal.name, animalId: animal.id });
     this.quickAnimalId = null;
   }
@@ -929,6 +999,7 @@ export class RegistrationFormComponent {
   private createEmptyModel(): CreateDto {
     return {
       ownerName: '',
+      ownerNameAr: '',
       ownerMobile: '',
       clientId: null,
       ownerId: null,
@@ -1028,10 +1099,15 @@ export class RegistrationFormComponent {
     this.model.ageUnit = this.ageValue ? this.ageUnit : null;
 
     this.saving = true;
-    this.http.post<{ barcode?: string }>('/api/registrations', this.model).subscribe({
+    const url = this.editMode ? `/api/registrations/${this.editId}` : '/api/registrations';
+    const request = this.editMode
+      ? this.http.put<{ barcode?: string }>(url, this.model)
+      : this.http.post<{ barcode?: string }>(url, this.model);
+
+    request.subscribe({
       next: (res) => {
         this.saving = false;
-        this.successMessage = res?.barcode ? `Registration created: ${res.barcode}` : 'Registration created.';
+        this.successMessage = res?.barcode ? `Registration ${this.editMode ? 'updated' : 'created'}: ${res.barcode}` : `Registration ${this.editMode ? 'updated' : 'created'}.`;
         void this.router.navigate(['/registrations']);
       },
       error: (err) => {

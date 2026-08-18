@@ -27,6 +27,7 @@ public class Registration : BaseEntity
 
     // Owner single name (free text, any language)
     public string OwnerName { get; set; } = default!;
+    public string? OwnerNameAr { get; set; }
 
     // Mobile captured at registration time (owner master mobile if existing owner)
     public string? OwnerMobile { get; set; }
