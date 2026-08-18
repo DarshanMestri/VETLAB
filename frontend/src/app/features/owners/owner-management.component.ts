@@ -199,23 +199,23 @@ interface HistoryForm {
           <form (ngSubmit)="saveOwner()" novalidate>
             <div class="row g-3">
               <div class="col-md-4">
-                <label class="form-label">Owner code *</label>
+                <label class="form-label">Owner Code *</label>
                 <input class="form-control" maxlength="50" [(ngModel)]="ownerForm.code" name="ownerCode" />
               </div>
               <div class="col-md-4">
-                <label class="form-label">Name *</label>
+                <label class="form-label">Name (English) *</label>
                 <input class="form-control" maxlength="200" [(ngModel)]="ownerForm.name" name="ownerName" />
               </div>
               <div class="col-md-4">
                 <label class="form-label">Name (Arabic)</label>
-                <input class="form-control" maxlength="200" dir="rtl" [(ngModel)]="ownerForm.nameAr" name="ownerNameAr" />
+                <input class="form-control" maxlength="200" dir="rtl" lang="ar" [(ngModel)]="ownerForm.nameAr" name="ownerNameAr" placeholder="&#1575;&#1604;&#1573;&#1587;&#1605;" />
               </div>
               <div class="col-md-3">
                 <label class="form-label">Mobile</label>
                 <input class="form-control" maxlength="30" [(ngModel)]="ownerForm.mobile" name="mobile" />
               </div>
               <div class="col-md-3">
-                <label class="form-label">WhatsApp</label>
+                <label class="form-label">Alternate Phone / WhatsApp</label>
                 <input class="form-control" maxlength="30" [(ngModel)]="ownerForm.whatsApp" name="whatsApp" />
               </div>
               <div class="col-md-3">
@@ -226,13 +226,9 @@ interface HistoryForm {
                 <label class="form-label">City</label>
                 <input class="form-control" maxlength="100" [(ngModel)]="ownerForm.city" name="city" />
               </div>
-              <div class="col-md-12">
+              <div class="col-12">
                 <label class="form-label">Address</label>
                 <input class="form-control" [(ngModel)]="ownerForm.address" name="address" />
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">City</label>
-                <input class="form-control" maxlength="100" [(ngModel)]="ownerForm.city" name="city" />
               </div>
               <div class="col-12">
                 <div class="form-check">
@@ -414,14 +410,14 @@ interface HistoryForm {
             <div class="card-body">
               <form (ngSubmit)="saveOwner()" novalidate>
                 <div class="row g-3">
-                  <div class="col-md-4"><label class="form-label">Owner code *</label><input class="form-control" maxlength="50" [(ngModel)]="ownerForm.code" name="profileOwnerCode" /></div>
-                  <div class="col-md-4"><label class="form-label">Name *</label><input class="form-control" maxlength="200" [(ngModel)]="ownerForm.name" name="profileOwnerName" /></div>
-                  <div class="col-md-4"><label class="form-label">Name (Arabic)</label><input class="form-control" maxlength="200" dir="rtl" [(ngModel)]="ownerForm.nameAr" name="profileOwnerNameAr" /></div>
+                  <div class="col-md-4"><label class="form-label">Owner Code *</label><input class="form-control" maxlength="50" [(ngModel)]="ownerForm.code" name="profileOwnerCode" /></div>
+                  <div class="col-md-4"><label class="form-label">Name (English) *</label><input class="form-control" maxlength="200" [(ngModel)]="ownerForm.name" name="profileOwnerName" /></div>
+                  <div class="col-md-4"><label class="form-label">Name (Arabic)</label><input class="form-control" maxlength="200" dir="rtl" lang="ar" [(ngModel)]="ownerForm.nameAr" name="profileOwnerNameAr" placeholder="&#1575;&#1604;&#1573;&#1587;&#1605;" /></div>
                   <div class="col-md-3"><label class="form-label">Mobile</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.mobile" name="profileMobile" /></div>
-                  <div class="col-md-3"><label class="form-label">WhatsApp</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.whatsApp" name="profileWhatsApp" /></div>
+                  <div class="col-md-3"><label class="form-label">Alternate Phone / WhatsApp</label><input class="form-control" maxlength="30" [(ngModel)]="ownerForm.whatsApp" name="profileWhatsApp" /></div>
                   <div class="col-md-3"><label class="form-label">Email</label><input type="email" class="form-control" maxlength="200" [(ngModel)]="ownerForm.email" name="profileEmail" /></div>
                   <div class="col-md-3"><label class="form-label">City</label><input class="form-control" maxlength="100" [(ngModel)]="ownerForm.city" name="profileCity" /></div>
-                  <div class="col-md-12"><label class="form-label">Address</label><input class="form-control" [(ngModel)]="ownerForm.address" name="profileAddress" /></div>
+                  <div class="col-12"><label class="form-label">Address</label><input class="form-control" [(ngModel)]="ownerForm.address" name="profileAddress" /></div>
                   <div class="col-12"><div class="form-check"><input id="profileOwnerActive" class="form-check-input" type="checkbox" [(ngModel)]="ownerForm.isActive" name="profileOwnerIsActive" /><label class="form-check-label" for="profileOwnerActive">Active</label></div></div>
                 </div>
                 <div class="text-end mt-3">
@@ -453,7 +449,7 @@ interface HistoryForm {
                 </div>
                 <div class="text-end mt-3">
                   <button type="button" class="btn btn-secondary me-2" (click)="closeAnimalForm()">Cancel</button>
-                  <button class="btn btn-primary" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save Animal' }}</button>
+                  <button type="submit" class="btn btn-primary" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save Animal' }}</button>
                 </div>
               </form>
             </div>
@@ -522,6 +518,7 @@ export class OwnerManagementComponent implements OnInit {
       this.message.set('');
 
       if (this.ownerId) {
+        this.showOwnerForm.set(false);
         this.loadLookups();
         this.loadProfile();
         return;
@@ -712,7 +709,7 @@ export class OwnerManagementComponent implements OnInit {
       breedId: this.animalForm.breedId,
       genderId: this.animalForm.genderId,
       colorId: this.animalForm.colorId,
-      dateOfBirth: this.animalForm.dateOfBirth,
+      dateOfBirth: this.animalForm.dateOfBirth || null,
       weightKg: this.animalForm.weightKg,
       microchipNumber: this.cleanString(this.animalForm.microchipNumber),
       photoUrl: this.cleanString(this.animalForm.photoUrl),

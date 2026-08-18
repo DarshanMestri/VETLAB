@@ -24,7 +24,7 @@ import { FormsModule } from '@angular/forms';
               <button type="button" class="btn btn-outline-secondary" (click)="close()">
                 Cancel
               </button>
-              <button type="submit" class="btn btn-primary">{{ okText || 'Save' }}</button>
+              <button type="submit" class="btn btn-primary" [disabled]="saving">{{ saving ? 'Saving…' : (okText || 'Save') }}</button>
             </div>
           </form>
         </div>
@@ -36,6 +36,7 @@ export class SimpleDialogComponent<T = any> {
   @Input() title = 'Edit';
   @Input() okText = 'Save';
   @Input() model!: T;
+  @Input() saving = false;
   @Output() submit = new EventEmitter<T>();
   @Output() closed = new EventEmitter<void>();
   close() {

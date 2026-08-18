@@ -200,6 +200,7 @@ type Species = { id: number; name: string };
       *ngIf="paramOpen"
       [title]="paramTitle"
       [model]="paramModel"
+      [saving]="paramSaving"
       okText="Save Param"
       (submit)="saveParam()"
       (closed)="closeParams()"
@@ -270,6 +271,7 @@ type Species = { id: number; name: string };
       *ngIf="rangeOpen"
       [title]="rangeTitle"
       [model]="rangeModel"
+      [saving]="rangeSaving"
       okText="Save Range"
       (submit)="saveRange()"
       (closed)="closeRanges()"
@@ -374,6 +376,7 @@ export class TestsListComponent {
   paramOpen = false;
   paramTitle = 'Parameters';
   paramModel: any = { name: '', unitId: null, sortOrder: 1 };
+  paramSaving = false;
   currentTestId: number | null = null;
   params: ParamRow[] = [];
 
@@ -381,6 +384,7 @@ export class TestsListComponent {
   rangeOpen = false;
   rangeTitle = 'Reference Ranges';
   rangeModel: any = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+  rangeSaving = false;
   editingRangeId: number | null = null;
   rangeParamId: number | null = null;
   ranges: RangeRow[] = [];
@@ -569,6 +573,7 @@ export class TestsListComponent {
     this.paramOpen = false;
     this.params = [];
     this.currentTestId = null;
+    this.paramSaving = false;
   }
 
   reloadParams() {
@@ -579,7 +584,7 @@ export class TestsListComponent {
   }
 
   saveParam() {
-    if (!this.currentTestId) return;
+    if (!this.currentTestId || this.paramSaving) return;
     const m = this.paramModel;
     const name = m.name?.trim() ?? '';
     if (!name) {
@@ -600,23 +605,32 @@ export class TestsListComponent {
       sortOrder: Number(m.sortOrder) || 0,
       isActive: m.isActive ?? true,
     };
+    this.paramSaving = true;
     if (m.id) {
       this.http
         .put(`/api/tests/${this.currentTestId}/parameters/${m.id}`, payload)
         .subscribe({
           next: () => {
             this.paramModel = { name: '', unitId: null, sortOrder: (this.params.at(-1)?.sortOrder ?? 0) + 1 };
+            this.paramSaving = false;
             this.reloadParams();
           },
-          error: (e) => alert(e?.error?.title ?? e?.error ?? 'Update failed'),
+          error: (e) => {
+            this.paramSaving = false;
+            alert(e?.error?.title ?? e?.error ?? 'Update failed');
+          },
         });
     } else {
       this.http.post(`/api/tests/${this.currentTestId}/parameters`, payload).subscribe({
         next: () => {
           this.paramModel = { name: '', unitId: null, sortOrder: (this.params.at(-1)?.sortOrder ?? 0) + 1 };
+          this.paramSaving = false;
           this.reloadParams();
         },
-        error: (e) => alert(e?.error?.title ?? e?.error ?? 'Create failed'),
+        error: (e) => {
+          this.paramSaving = false;
+          alert(e?.error?.title ?? e?.error ?? 'Create failed');
+        },
       });
     }
   }
@@ -644,6 +658,7 @@ export class TestsListComponent {
     this.rangeTitle = `Ranges — ${p.name}`;
     this.rangeModel = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
     this.editingRangeId = null;
+    this.paramOpen = false;
     this.rangeOpen = true;
     this.reloadRanges();
   }
@@ -652,6 +667,7 @@ export class TestsListComponent {
     this.ranges = [];
     this.rangeParamId = null;
     this.editingRangeId = null;
+    this.rangeSaving = false;
   }
 
   reloadRanges() {
@@ -662,7 +678,7 @@ export class TestsListComponent {
   }
 
   saveRange() {
-    if (!this.rangeParamId) return;
+    if (!this.rangeParamId || this.rangeSaving) return;
     const m = this.rangeModel;
     if (!m.speciesId) {
       alert('Species is required.');
@@ -678,6 +694,7 @@ export class TestsListComponent {
       note: m.note?.trim() || null,
       isActive: m.isActive ?? true,
     };
+    this.rangeSaving = true;
     if (this.editingRangeId) {
       this.http
         .put(`/api/tests/parameters/${this.rangeParamId}/ranges/${this.editingRangeId}`, payload)
@@ -685,9 +702,13 @@ export class TestsListComponent {
           next: () => {
             this.editingRangeId = null;
             this.rangeModel = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+            this.rangeSaving = false;
             this.reloadRanges();
           },
-          error: (e) => alert(e?.error?.title ?? e?.error ?? 'Update failed'),
+          error: (e) => {
+            this.rangeSaving = false;
+            alert(e?.error?.title ?? e?.error ?? 'Update failed');
+          },
         });
     } else {
       this.http
@@ -695,9 +716,13 @@ export class TestsListComponent {
         .subscribe({
           next: () => {
             this.rangeModel = { speciesId: null, ageFromDays: null, ageToDays: null, low: null, high: null, note: '', isActive: true };
+            this.rangeSaving = false;
             this.reloadRanges();
           },
-          error: (e) => alert(e?.error?.title ?? e?.error ?? 'Create failed'),
+          error: (e) => {
+            this.rangeSaving = false;
+            alert(e?.error?.title ?? e?.error ?? 'Create failed');
+          },
         });
     }
   }
