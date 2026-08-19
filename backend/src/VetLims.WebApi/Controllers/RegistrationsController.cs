@@ -6,6 +6,7 @@ using VetLims.Infrastructure.Entities;
 using VetLims.Infrastructure.Services;
 using VetLims.WebApi.DTOs;
 using VetLims.WebApi.Common;
+using VetLims.WebApi.Reporting;
 
 namespace VetLims.WebApi.Controllers;
 
@@ -18,10 +19,11 @@ public class RegistrationsController : ControllerBase
     private readonly PricingService _pricing;
     private readonly BarcodeService _barcodes;
     private readonly ICurrentUserService _currentUserService;
+    private readonly BarcodeLabelReportService _barcodeReport;
 
-    public RegistrationsController(VetLimsDbContext db, PricingService pricing, BarcodeService barcodes, ICurrentUserService currentUserService)
+    public RegistrationsController(VetLimsDbContext db, PricingService pricing, BarcodeService barcodes, ICurrentUserService currentUserService, BarcodeLabelReportService barcodeReport)
     {
-        _db = db; _pricing = pricing; _barcodes = barcodes; _currentUserService = currentUserService;
+        _db = db; _pricing = pricing; _barcodes = barcodes; _currentUserService = currentUserService; _barcodeReport = barcodeReport;
     }
 
     // List + filters (owner search, client, species)
@@ -47,8 +49,8 @@ public class RegistrationsController : ControllerBase
         {
             query = query.Where(reg => reg.Animals.Any(a => a.SpeciesId == q.SpeciesId.Value));
         }
-        if (q.DateFrom.HasValue) query = query.Where(x => x.CreatedAt >= q.DateFrom.Value);
-        if (q.DateTo.HasValue) query = query.Where(x => x.CreatedAt <= q.DateTo.Value.AddDays(1).AddTicks(-1));
+        if (q.DateFrom.HasValue) query = query.Where(x => x.CreatedDate >= q.DateFrom.Value);
+        if (q.DateTo.HasValue) query = query.Where(x => x.CreatedDate <= q.DateTo.Value.AddDays(1).AddTicks(-1));
 
         var total = await query.CountAsync();
         var items = await query.OrderByDescending(x => x.Id)
@@ -73,7 +75,8 @@ public class RegistrationsController : ControllerBase
                 x.DiscountValue,
                 (int?)x.DiscountType,
                 x.AgeValue,
-                (int?)x.AgeUnit))
+                (int?)x.AgeUnit,
+                x.PaidAmount >= x.TotalAmount ? "Paid" : x.PaidAmount > 0 ? "Partially Paid" : "Unpaid"))
             .ToListAsync();
 
         return Ok(new PagedResult<RegistrationDto> { Page = page, PageSize = size, Total = total, Items = items });
@@ -176,6 +179,7 @@ public class RegistrationsController : ControllerBase
                 AnimalId = a.AnimalId,
                 SpeciesId = speciesId,
                 AnimalName = animalName,
+                Barcode = await _barcodes.NextAsync("AN"),
                 AgeInDays = regAgeInDays
             });
         }
@@ -380,6 +384,7 @@ public class RegistrationsController : ControllerBase
                 AnimalId = a.AnimalId,
                 SpeciesId = speciesId,
                 AnimalName = animalName,
+                Barcode = await _barcodes.NextAsync("AN"),
                 AgeInDays = regAgeInDays
             });
         }
@@ -560,6 +565,9 @@ public class RegistrationsController : ControllerBase
         var reg = await _db.Registrations.FindAsync(id);
         if (reg is null) return NotFound();
 
+        if (reg.PaidAmount + dto.Amount > reg.TotalAmount)
+            return BadRequest("Payment amount would exceed the total amount due.");
+
         var p = new Payment
         {
             RegistrationId = id,
@@ -588,6 +596,33 @@ public class RegistrationsController : ControllerBase
         item.SampleStatus = SampleWorkflowStatus.Collected;
         item.SampleCollectedAt = DateTime.UtcNow;
         item.SampleNotes = dto.Notes?.Trim();
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("animals/{animalId:int}/collect")]
+    public async Task<ActionResult> CollectAnimalSamples(int animalId, [FromBody] SampleWorkflowUpdateDto dto)
+    {
+        var animal = await _db.RegistrationAnimals.FirstOrDefaultAsync(x => x.Id == animalId);
+        if (animal is null) return NotFound();
+
+        var items = await _db.RegistrationItems
+            .Where(x => x.RegistrationId == animal.RegistrationId
+                     && x.SpeciesId == animal.SpeciesId
+                     && x.SampleStatus < SampleWorkflowStatus.Collected)
+            .ToListAsync();
+
+        if (items.Count == 0)
+            return Conflict("All samples for this animal are already collected.");
+
+        var now = DateTime.UtcNow;
+        foreach (var item in items)
+        {
+            item.SampleStatus = SampleWorkflowStatus.Collected;
+            item.SampleCollectedAt = now;
+            item.SampleNotes = dto.Notes?.Trim();
+        }
+
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -645,6 +680,35 @@ public class RegistrationsController : ControllerBase
         return Ok(new { totalBalance });
     }
 
+    [HttpGet("{id:int}/barcodes")]
+    public async Task<ActionResult<object>> GetBarcodes(int id)
+    {
+        var reg = await _db.Registrations.AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => new
+            {
+                RegistrationBarcode = r.Barcode,
+                OwnerName = r.OwnerName,
+                OwnerCode = r.Owner != null ? r.Owner.Code : null,
+                Animals = r.Animals
+                    .OrderBy(a => a.Id)
+                    .Select(a => new
+                    {
+                        a.Id,
+                        a.AnimalName,
+                        SpeciesName = a.Species.Name,
+                        a.Barcode,
+                        a.AgeInDays,
+                        AnimalCode = a.Animal != null ? a.Animal.Code : null,
+                        a.SpeciesId,
+                    }).ToList()
+            })
+            .FirstOrDefaultAsync();
+
+        if (reg is null) return NotFound();
+        return Ok(reg);
+    }
+
     private async Task<RegistrationDetailDto?> ProjectDetail(int id)
     {
         return await _db.Registrations.AsNoTracking()
@@ -664,7 +728,7 @@ public class RegistrationsController : ControllerBase
                 r.TotalVat,
                 r.PaidAmount,
                 r.Balance,
-                r.Animals.Select(a => new RegistrationAnimalView(a.Id, a.SpeciesId, a.AnimalName, a.AnimalId, a.AgeInDays)).ToList(),
+                r.Animals.Select(a => new RegistrationAnimalView(a.Id, a.SpeciesId, a.AnimalName, a.AnimalId, a.Barcode, a.AgeInDays, a.Animal != null ? a.Animal.Code : null)).ToList(),
                 r.Items.Select(i => new RegistrationItemView(
                     i.Id,
                     i.ItemType,
@@ -688,7 +752,25 @@ public class RegistrationsController : ControllerBase
                 r.DiscountValue,
                 (int?)r.DiscountType,
                 r.AgeValue,
-                (int?)r.AgeUnit))
+                (int?)r.AgeUnit,
+                r.PaidAmount >= r.TotalAmount ? "Paid" : r.PaidAmount > 0 ? "Partially Paid" : "Unpaid",
+                r.Owner != null ? r.Owner.Code : null))
             .FirstOrDefaultAsync();
+    }
+
+    [HttpGet("{id:int}/barcodes/pdf")]
+    public async Task<IActionResult> GetBarcodesPdf(int id, [FromQuery] int count = 1, CancellationToken ct = default)
+    {
+        var result = await _barcodeReport.GenerateForRegistrationAsync(id, count, ct);
+        if (result is null) return NotFound();
+        return File(result.Content, result.ContentType, result.FileName);
+    }
+
+    [HttpGet("animals/{animalId:int}/barcode/pdf")]
+    public async Task<IActionResult> GetAnimalBarcodePdf(int animalId, [FromQuery] int count = 1, CancellationToken ct = default)
+    {
+        var result = await _barcodeReport.GenerateForAnimalAsync(animalId, count, ct);
+        if (result is null) return NotFound();
+        return File(result.Content, result.ContentType, result.FileName);
     }
 }

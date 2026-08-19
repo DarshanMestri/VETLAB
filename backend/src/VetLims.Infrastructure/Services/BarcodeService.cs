@@ -8,21 +8,43 @@ public class BarcodeService
     private readonly VetLimsDbContext _db;
     public BarcodeService(VetLimsDbContext db) { _db = db; }
 
-    // Generates a unique code like "VL-00000123"
+    /// <summary>
+    /// Generates a unique sequential code like "VL-00000123".
+    /// Each prefix maintains its own independent sequence.
+    /// Uses row-level locking to prevent duplicates under concurrency.
+    /// </summary>
     public async Task<string> NextAsync(string prefix = "VL", CancellationToken ct = default)
     {
-        // Single row table; create if missing
-        var seq = await _db.BarcodeSequences.FirstOrDefaultAsync(ct);
-        if (seq == null)
+        // Ensure a sequence row exists for this prefix
+        var exists = await _db.BarcodeSequences.AnyAsync(x => x.Prefix == prefix, ct);
+        if (!exists)
         {
-            seq = new BarcodeSequence { Prefix = prefix, CurrentValue = 0 };
-            _db.BarcodeSequences.Add(seq);
-            await _db.SaveChangesAsync(ct);
+            try
+            {
+                _db.BarcodeSequences.Add(new BarcodeSequence { Prefix = prefix, CurrentValue = 0 });
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Another thread inserted the same prefix — safe to continue
+            }
         }
 
-        seq.CurrentValue += 1;
-        await _db.SaveChangesAsync(ct);
+        // Atomic increment using raw SQL (PostgreSQL: UPDATE ... RETURNING)
+        var result = await _db.Database
+            .SqlQueryRaw<long>(
+                "UPDATE barcode_sequences SET current_value = current_value + 1 WHERE prefix = {0} RETURNING current_value",
+                prefix)
+            .FirstOrDefaultAsync(ct);
 
-        return $"{seq.Prefix}-{seq.CurrentValue:D8}";
+        if (result == 0)
+        {
+            // Sequence row was deleted — recreate and retry
+            _db.BarcodeSequences.Add(new BarcodeSequence { Prefix = prefix, CurrentValue = 1 });
+            await _db.SaveChangesAsync(ct);
+            result = 1;
+        }
+
+        return $"{prefix}-{result:D8}";
     }
 }

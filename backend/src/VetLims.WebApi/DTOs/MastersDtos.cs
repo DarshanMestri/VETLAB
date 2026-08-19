@@ -212,7 +212,8 @@ public record RegistrationDto(
     decimal DiscountValue = 0,
     int? DiscountType = null,
     int? AgeValue = null,
-    int? AgeUnit = null
+    int? AgeUnit = null,
+    string PaymentStatus = "Unpaid"
 );
 
 public record RegistrationAnimalDto(int SpeciesId, string? AnimalName, int? AnimalId = null, int? AgeInDays = null);
@@ -242,10 +243,12 @@ public record RegistrationDetailDto(
     decimal DiscountValue = 0,
     int? DiscountType = null,
     int? AgeValue = null,
-    int? AgeUnit = null
+    int? AgeUnit = null,
+    string PaymentStatus = "Unpaid",
+    string? OwnerCode = null
 );
 
-public record RegistrationAnimalView(int Id, int SpeciesId, string? AnimalName, int? AnimalId, int? AgeInDays = null);
+public record RegistrationAnimalView(int Id, int SpeciesId, string? AnimalName, int? AnimalId, string? Barcode = null, int? AgeInDays = null, string? AnimalCode = null);
 public record RegistrationItemView(
     int Id,
     RegItemType ItemType,
@@ -273,6 +276,8 @@ public record ResultWorkItemDto(
     int RegistrationItemId,
     int RegistrationId,
     string OwnerName,
+    string? OwnerNameAr,
+    string? OwnerMobile,
     string ItemBarcode,
     string? TestCode,
     string? TestName,
@@ -285,7 +290,7 @@ public record ResultWorkItemDto(
     bool PathologistAuthenticated,
     string? AnimalNames = null,
     int AnimalCount = 0,
-    string? OwnerMobile = null
+    string? RerunReason = null
 );
 
 public record ResultValueDto(
@@ -309,11 +314,21 @@ public record ResultValueDto(
     bool? IsOutOfRange
 );
 
+public record ResultAnimalDto(
+    int Id,
+    string AnimalName,
+    int SpeciesId,
+    string? SpeciesName,
+    int? AnimalId,
+    int? AgeInDays
+);
+
 public record ResultDetailDto(
     int RegistrationItemId,
     string ItemBarcode,
     string? Notes,
     string SampleStatus,
+    string Status,
     string? TechnicianVerifiedBy,
     DateTime? TechnicianVerifiedAt,
     string? PathologistAuthenticatedBy,
@@ -321,9 +336,17 @@ public record ResultDetailDto(
     string? DigitalSignature,
     string? VerificationRemarks,
     IEnumerable<ResultValueDto> Values,
+    IEnumerable<ResultAnimalDto> Animals,
     string? OwnerName = null,
-    string? AnimalNames = null,
-    int AnimalCount = 0
+    string? OwnerNameAr = null,
+    string? OwnerMobile = null,
+    string? OwnerEmail = null,
+    string? OwnerCode = null,
+    int? OwnerId = null,
+    int? ClientId = null,
+    string? RerunReason = null,
+    string? RerunInitiatedBy = null,
+    DateTime? RerunAt = null
 );
 
 // payload to save values
@@ -348,5 +371,6 @@ public record ResultEntryValue(
 );
 
 public record SampleWorkflowUpdateDto(string? Notes = null);
-public record ResultVerificationDto(string VerifiedBy, string? Remarks = null);
-public record ResultAuthenticationDto(string AuthenticatedBy, string? DigitalSignature = null, string? Remarks = null);
+public record ResultVerificationDto(string? Remarks = null);
+public record ResultAuthenticationDto(string? DigitalSignature = null, string? Remarks = null);
+public record ResultRerunDto(string? Reason = null);

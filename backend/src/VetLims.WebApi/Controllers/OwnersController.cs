@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VetLims.Infrastructure;
 using VetLims.Infrastructure.Entities;
+using VetLims.Infrastructure.Services;
 using VetLims.WebApi.DTOs;
 
 namespace VetLims.WebApi.Controllers;
@@ -12,7 +13,7 @@ namespace VetLims.WebApi.Controllers;
 [ApiController]
 [Route("api/owners")]
 [Authorize]
-public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
+public sealed class OwnersController(VetLimsDbContext db, BarcodeService barcodes) : ControllerBase
 {
     private const int MaximumPageSize = 100;
 
@@ -67,7 +68,11 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
     public async Task<ActionResult<OwnerProfileDto>> Create(OwnerUpsertDto dto, CancellationToken ct = default)
     {
         var validation = await ValidateOwnerAsync(dto, null, ct); if (validation is not null) return validation;
-        var owner = new Owner(); Apply(owner, dto); db.Owners.Add(owner); await db.SaveChangesAsync(ct);
+        var owner = new Owner();
+        Apply(owner, dto);
+        if (string.IsNullOrWhiteSpace(owner.Code))
+            owner.Code = await barcodes.NextAsync("OWN", ct);
+        db.Owners.Add(owner); await db.SaveChangesAsync(ct);
         return CreatedAtAction(nameof(Get), new { ownerId = owner.Id }, await ProjectOwnerAsync(owner.Id, ct));
     }
 
@@ -99,7 +104,11 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
     {
         if (!await db.Owners.AnyAsync(x => x.Id == ownerId && !x.IsDeleted, ct)) return NotFound();
         var validation = await ValidateAnimalAsync(dto, null, ct); if (validation is not null) return validation;
-        var animal = new Animal { OwnerId = ownerId }; Apply(animal, dto); db.Animals.Add(animal); await db.SaveChangesAsync(ct);
+        var animal = new Animal { OwnerId = ownerId };
+        Apply(animal, dto);
+        if (string.IsNullOrWhiteSpace(animal.Code))
+            animal.Code = await barcodes.NextAsync("ANI", ct);
+        db.Animals.Add(animal); await db.SaveChangesAsync(ct);
         return CreatedAtAction(nameof(GetAnimal), new { ownerId, animalId = animal.Id }, await ProjectAnimalAsync(ownerId, animal.Id, ct));
     }
 
@@ -154,18 +163,18 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
     private async Task<ActionResult?> ValidateOwnerAsync(OwnerUpsertDto dto, int? id, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
-        if (string.IsNullOrWhiteSpace(dto.Code) || dto.Code.Trim().Length > 50) errors[nameof(dto.Code)] = ["Code is required and must be 50 characters or fewer."];
+        if (!string.IsNullOrWhiteSpace(dto.Code) && dto.Code.Trim().Length > 50) errors[nameof(dto.Code)] = ["Code must be 50 characters or fewer."];
         if (string.IsNullOrWhiteSpace(dto.Name) || dto.Name.Trim().Length > 200) errors[nameof(dto.Name)] = ["Name is required and must be 200 characters or fewer."];
         if (!string.IsNullOrWhiteSpace(dto.Email) && !new EmailAddressAttribute().IsValid(dto.Email)) errors[nameof(dto.Email)] = ["Email is invalid."];
         if (errors.Count > 0) return BadRequest(new ValidationProblemDetails(errors));
-        if (await db.Owners.AnyAsync(x => x.Code == dto.Code.Trim() && !x.IsDeleted && x.Id != id, ct)) return Conflict(new { message = "Owner code already exists." });
+        if (!string.IsNullOrWhiteSpace(dto.Code) && await db.Owners.AnyAsync(x => x.Code == dto.Code.Trim() && !x.IsDeleted && x.Id != id, ct)) return Conflict(new { message = "Owner code already exists." });
         return null;
     }
 
     private async Task<ActionResult?> ValidateAnimalAsync(AnimalUpsertDto dto, int? id, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
-        if (string.IsNullOrWhiteSpace(dto.Code) || dto.Code.Trim().Length > 50) errors[nameof(dto.Code)] = ["Code is required and must be 50 characters or fewer."];
+        if (!string.IsNullOrWhiteSpace(dto.Code) && dto.Code.Trim().Length > 50) errors[nameof(dto.Code)] = ["Code must be 50 characters or fewer."];
         if (string.IsNullOrWhiteSpace(dto.Name) || dto.Name.Trim().Length > 200) errors[nameof(dto.Name)] = ["Name is required and must be 200 characters or fewer."];
         if (dto.SpeciesId <= 0 || !await db.Species.AnyAsync(x => x.Id == dto.SpeciesId && !x.IsDeleted, ct)) errors[nameof(dto.SpeciesId)] = ["A valid species is required."];
         if (dto.BreedId.HasValue && !await db.Breeds.AnyAsync(x => x.Id == dto.BreedId && !x.IsDeleted, ct)) errors[nameof(dto.BreedId)] = ["Breed does not exist."];
@@ -173,7 +182,7 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
         if (dto.ColorId.HasValue && !await db.AnimalColors.AnyAsync(x => x.Id == dto.ColorId && !x.IsDeleted, ct)) errors[nameof(dto.ColorId)] = ["Color does not exist."];
         if (dto.WeightKg is <= 0) errors[nameof(dto.WeightKg)] = ["Weight must be greater than zero."];
         if (errors.Count > 0) return BadRequest(new ValidationProblemDetails(errors));
-        if (await db.Animals.AnyAsync(x => x.Code == dto.Code.Trim() && !x.IsDeleted && x.Id != id, ct)) return Conflict(new { message = "Animal code already exists." });
+        if (!string.IsNullOrWhiteSpace(dto.Code) && await db.Animals.AnyAsync(x => x.Code == dto.Code.Trim() && !x.IsDeleted && x.Id != id, ct)) return Conflict(new { message = "Animal code already exists." });
         if (!string.IsNullOrWhiteSpace(dto.MicrochipNumber) && await db.Animals.AnyAsync(x => x.MicrochipNumber == dto.MicrochipNumber.Trim() && !x.IsDeleted && x.Id != id, ct)) return Conflict(new { message = "Microchip number already exists." });
         return null;
     }
@@ -300,8 +309,8 @@ public sealed class OwnersController(VetLimsDbContext db) : ControllerBase
                 animal.MedicalHistory);
     }
     private static MedicalHistoryDto Map(MedicalHistoryEntry x) => new(x.Id, x.OccurredAt, x.EntryType, x.Diagnosis, x.Treatment, x.Medication, x.Notes);
-    private static void Apply(Owner x, OwnerUpsertDto dto) { x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.NameAr = Clean(dto.NameAr); x.Mobile = Clean(dto.Mobile); x.WhatsApp = Clean(dto.WhatsApp); x.Email = Clean(dto.Email); x.Address = Clean(dto.Address); x.City = Clean(dto.City); x.IsActive = dto.IsActive; }
-    private static void Apply(Animal x, AnimalUpsertDto dto) { x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.SpeciesId = dto.SpeciesId; x.BreedId = dto.BreedId; x.GenderId = dto.GenderId; x.ColorId = dto.ColorId; x.DateOfBirth = dto.DateOfBirth; x.WeightKg = dto.WeightKg; x.MicrochipNumber = Clean(dto.MicrochipNumber); x.PhotoUrl = Clean(dto.PhotoUrl); x.VaccinationStatus = Clean(dto.VaccinationStatus); x.IsActive = dto.IsActive; }
+    private static void Apply(Owner x, OwnerUpsertDto dto) { if (!string.IsNullOrWhiteSpace(dto.Code)) x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.NameAr = Clean(dto.NameAr); x.Mobile = Clean(dto.Mobile); x.WhatsApp = Clean(dto.WhatsApp); x.Email = Clean(dto.Email); x.Address = Clean(dto.Address); x.City = Clean(dto.City); x.IsActive = dto.IsActive; }
+    private static void Apply(Animal x, AnimalUpsertDto dto) { if (!string.IsNullOrWhiteSpace(dto.Code)) x.Code = dto.Code.Trim(); x.Name = dto.Name.Trim(); x.SpeciesId = dto.SpeciesId; x.BreedId = dto.BreedId; x.GenderId = dto.GenderId; x.ColorId = dto.ColorId; x.DateOfBirth = dto.DateOfBirth; x.WeightKg = dto.WeightKg; x.MicrochipNumber = Clean(dto.MicrochipNumber); x.PhotoUrl = Clean(dto.PhotoUrl); x.VaccinationStatus = Clean(dto.VaccinationStatus); x.IsActive = dto.IsActive; }
     private static void Apply(MedicalHistoryEntry x, MedicalHistoryUpsertDto dto) { x.OccurredAt = dto.OccurredAt; x.EntryType = dto.EntryType.Trim(); x.Diagnosis = Clean(dto.Diagnosis); x.Treatment = Clean(dto.Treatment); x.Medication = Clean(dto.Medication); x.Notes = Clean(dto.Notes); }
     private static int? CalculateAgeInDays(DateOnly? dateOfBirth)
     {

@@ -14,6 +14,7 @@ type Row = {
   paidAmount: number;
   balance: number;
   discountAmount: number;
+  paymentStatus: string;
 };
 type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
 
@@ -65,11 +66,15 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
             <th>Discount</th>
             <th>Paid</th>
             <th>Balance</th>
+            <th>Status</th>
             <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let r of rows">
+          <tr *ngFor="let r of rows"
+              [class.table-danger]="r.paymentStatus === 'Unpaid'"
+              [class.table-success]="r.paymentStatus === 'Paid'"
+              [class.table-secondary]="r.paymentStatus === 'Partially Paid'">
             <td>{{ r.id }}</td>
             <td>{{ r.createdAt | date:'dd/MM/yyyy HH:mm' }}</td>
             <td>{{ r.ownerName }}</td>
@@ -78,8 +83,17 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
             <td>{{ r.discountAmount ? (r.discountAmount | currency:'AED') : '-' }}</td>
             <td>{{ r.paidAmount | currency:'AED' }}</td>
             <td>{{ r.balance | currency:'AED' }}</td>
+            <td>
+              <span class="badge"
+                [class.bg-danger]="r.paymentStatus === 'Unpaid'"
+                [class.bg-warning text-dark]="r.paymentStatus === 'Partially Paid'"
+                [class.bg-success]="r.paymentStatus === 'Paid'">
+                {{ r.paymentStatus || 'Unpaid' }}
+              </span>
+            </td>
             <td class="text-end">
               <a class="btn btn-sm btn-outline-primary me-1" [routerLink]="['/registrations', r.id]">Edit</a>
+              <button class="btn btn-sm btn-outline-secondary me-1" type="button" (click)="reprintBarcode(r.id)">Reprint Barcode</button>
               <button class="btn btn-sm btn-outline-success me-1" type="button" (click)="sendInvoice(r.id)">WhatsApp Invoice</button>
               <button class="btn btn-sm btn-outline-success" type="button" (click)="sendReceipt(r.id)">WhatsApp Receipt</button>
             </td>
@@ -160,6 +174,20 @@ export class RegistrationsListComponent {
     this.http.post<{ message: string }>(`/api/whatsapp/send/receipt/${registrationId}`, {}).subscribe({
       next: () => alert('Receipt queued for WhatsApp delivery.'),
       error: (err) => alert(err?.error ?? 'Unable to queue receipt.')
+    });
+  }
+
+  reprintBarcode(registrationId: number) {
+    this.http.get(`/api/registrations/${registrationId}/barcodes/pdf`, {
+      params: { count: 2 },
+      responseType: 'blob',
+    }).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => alert('Failed to generate barcode PDF.'),
     });
   }
 }

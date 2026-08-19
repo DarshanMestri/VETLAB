@@ -102,6 +102,11 @@ public class RegistrationItem : BaseEntity
     public DateTime? SampleReceivedAt { get; set; }
     public DateTime? SampleProcessedAt { get; set; }
     public string? SampleNotes { get; set; }
+
+    // Re-run tracking
+    public string? RerunReason { get; set; }
+    public string? RerunInitiatedBy { get; set; }
+    public DateTime? RerunAt { get; set; }
 }
 
 public class Payment : BaseEntity

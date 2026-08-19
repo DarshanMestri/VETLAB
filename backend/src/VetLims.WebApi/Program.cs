@@ -82,6 +82,7 @@ builder.Services.AddScoped<VetLims.Infrastructure.Services.PricingService>();
 builder.Services.AddScoped<VetLims.Infrastructure.Services.BarcodeService>();
 builder.Services.AddScoped<VetLims.Infrastructure.Services.ReferenceRangeService>();
 builder.Services.AddScoped<ResultReportService>();
+builder.Services.AddScoped<BarcodeLabelReportService>();
 builder.Services.AddScoped<IWhatsAppProvider, WhatsAppProvider>();
 builder.Services.AddScoped<WhatsAppMessagingService>();
 

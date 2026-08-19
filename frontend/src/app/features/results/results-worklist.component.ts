@@ -8,6 +8,8 @@ type WorkItem = {
   registrationItemId: number;
   registrationId: number;
   ownerName: string;
+  ownerNameAr?: string;
+  ownerMobile?: string;
   itemBarcode: string;
   testCode: string;
   testName: string;
@@ -20,12 +22,13 @@ type WorkItem = {
   pathologistAuthenticated: boolean;
   animalNames?: string;
   animalCount?: number;
-  ownerMobile?: string;
+  rerunReason?: string;
 };
 
 type WorkGroup = {
   registrationId: number;
   ownerName: string;
+  ownerNameAr?: string;
   ownerMobile?: string;
   animalNames: string;
   rows: WorkItem[];
@@ -102,6 +105,7 @@ type WorkGroup = {
           <tr class="table-primary">
             <td colspan="8">
               <strong>{{ group.ownerName }}</strong>
+              <span *ngIf="group.ownerNameAr" class="ms-2" dir="rtl">{{ group.ownerNameAr }}</span>
               <small *ngIf="group.ownerMobile" class="text-muted ms-2">Mobile: {{ group.ownerMobile }}</small>
               <span *ngIf="group.animalNames" class="text-muted ms-2">Animals: {{ group.animalNames }}</span>
             </td>
@@ -115,7 +119,10 @@ type WorkGroup = {
               <small>{{ row.animalNames || '-' }}</small>
             </td>
             <td>
-              <div>{{ row.status }}</div>
+              <div>
+                {{ row.status }}
+                <span *ngIf="row.rerunReason" class="badge bg-orange text-white ms-1" style="background-color:#e67e22">Re-run</span>
+              </div>
               <small class="text-muted">Sample: {{ row.sampleStatus }}</small>
             </td>
             <td>
@@ -183,6 +190,7 @@ export class ResultsWorklistComponent {
         group = {
           registrationId: row.registrationId,
           ownerName: row.ownerName,
+          ownerNameAr: row.ownerNameAr,
           ownerMobile: row.ownerMobile,
           animalNames: row.animalNames ?? '',
           rows: [],

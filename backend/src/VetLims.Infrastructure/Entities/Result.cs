@@ -15,6 +15,9 @@ public class Result : BaseEntity
     public int RegistrationItemId { get; set; }           // the ordered test/profile/package item
     public RegistrationItem RegistrationItem { get; set; } = default!;
 
+    public int? RegistrationAnimalId { get; set; }
+    public RegistrationAnimal? RegistrationAnimal { get; set; }
+
     public int? ClinicId { get; set; }
     public Clinic? Clinic { get; set; }
 
@@ -25,8 +28,10 @@ public class Result : BaseEntity
     public DateTime? CompletedAt { get; set; }            // set when item is marked completed
     public string? Notes { get; set; }
     public string? TechnicianVerifiedBy { get; set; }
+    public int? TechnicianVerifiedById { get; set; }
     public DateTime? TechnicianVerifiedAt { get; set; }
     public string? PathologistAuthenticatedBy { get; set; }
+    public int? PathologistAuthenticatedById { get; set; }
     public DateTime? PathologistAuthenticatedAt { get; set; }
     public string? DigitalSignature { get; set; }
     public string? VerificationRemarks { get; set; }

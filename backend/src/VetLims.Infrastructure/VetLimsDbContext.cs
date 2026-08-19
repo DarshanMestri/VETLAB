@@ -999,6 +999,8 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         modelBuilder.Entity<RegistrationAnimal>(e =>
         {
             e.ToTable("registration_animals");
+            e.Property(x => x.Barcode).HasMaxLength(50);
+            e.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL");
             e.HasOne(x => x.Registration).WithMany(r => r.Animals).HasForeignKey(x => x.RegistrationId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Animal).WithMany().HasForeignKey(x => x.AnimalId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Species).WithMany().HasForeignKey(x => x.SpeciesId).OnDelete(DeleteBehavior.Restrict);
@@ -1039,6 +1041,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         {
             e.ToTable("barcode_sequences");
             e.Property(x => x.Prefix).HasMaxLength(10);
+            e.HasIndex(x => x.Prefix).IsUnique();
         });
 
         // Results
@@ -1053,6 +1056,10 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             .WithMany()                                   // one result set per item
             .HasForeignKey(x => x.RegistrationItemId)
             .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.RegistrationAnimal)
+            .WithMany()
+            .HasForeignKey(x => x.RegistrationAnimalId)
+            .OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
         });

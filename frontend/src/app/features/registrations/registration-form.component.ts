@@ -1,8 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, NgZone, ChangeDetectorRef, AfterViewInit, ElementRef, ViewChildren, QueryList } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import JsBarcode from 'jsbarcode';
 
 enum RegItemType {
   Test = 1,
@@ -42,6 +43,23 @@ type OrderableOption = {
   sampleTypeId?: number | null;
 };
 type PriceInfo = { rate: number; vatRate: number };
+
+type BarcodePopupData = {
+  registrationId: number;
+  registrationBarcode: string;
+  ownerName: string;
+  ownerCode?: string;
+  animals: { id: number; animalName: string; speciesName: string; barcode: string; ageInDays?: number | null; printCount: number; animalCode?: string }[];
+};
+
+type SampleCollectionData = {
+  registrationId: number;
+  registrationBarcode: string;
+  ownerName: string;
+  ownerCode?: string;
+  items: { id: number; itemBarcode: string; sampleStatus: string; speciesId?: number; speciesName?: string; collectedAt?: string }[];
+  animals: { id: number; animalName: string; speciesName: string; barcode: string; speciesId?: number; collectedAt?: string; allCollected?: boolean; printCount: number; animalCode?: string }[];
+};
 
 type LookupResponse = {
   owners: OwnerOption[];
@@ -93,6 +111,7 @@ type CreateDto = {
         <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" routerLink="/registrations">Back</a>
           <button class="btn btn-outline-secondary btn-sm" type="button" (click)="resetForm()">Clear</button>
+          <button *ngIf="successMessage && !editMode" class="btn btn-outline-info btn-sm" type="button" (click)="openSampleCollectionPopup()">Collect Sample</button>
           <button class="btn btn-primary btn-sm" type="button" (click)="save()" [disabled]="saving">
             {{ saving ? 'Saving...' : (editMode ? 'Update Registration' : 'Save Registration') }}
           </button>
@@ -433,6 +452,15 @@ type CreateDto = {
                 <div class="summary-value">{{ selectedDoctorName || '(none)' }}</div>
                 <div class="summary-label">Client</div>
                 <div class="summary-value-last">{{ selectedClientName || '(walk-in)' }}</div>
+                <div class="summary-label" *ngIf="editMode">Payment Status</div>
+                <div *ngIf="editMode" class="mt-1">
+                  <span class="badge"
+                    [class.bg-danger]="paymentStatus === 'Unpaid'"
+                    [class.bg-warning text-dark]="paymentStatus === 'Partially Paid'"
+                    [class.bg-success]="paymentStatus === 'Paid'">
+                    {{ paymentStatus }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -528,11 +556,139 @@ type CreateDto = {
                 </span>
               </div>
             </div>
+            <!-- Payment History -->
+            <div *ngIf="existingPayments.length" class="mt-3">
+              <label class="form-label fw-semibold small">Payment History</label>
+              <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light">
+                  <tr><th>#</th><th>Method</th><th class="text-end">Amount</th><th>Date</th><th>Reference</th></tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let p of existingPayments; let i = index">
+                    <td>{{ i + 1 }}</td>
+                    <td>{{ p.method }}</td>
+                    <td class="text-end">{{ p.amount | currency:'AED' }}</td>
+                    <td>{{ p.paidAt | date:'dd/MM/yyyy HH:mm' }}</td>
+                    <td>{{ p.reference || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
         </div><!-- /col-lg-8 -->
       </div><!-- /row -->
-    </div>
+
+      <!-- BARCODE POPUP -->
+      <div class="modal-backdrop" *ngIf="showBarcodePopup" (click)="closeBarcodePopup()"></div>
+      <div class="modal d-block" *ngIf="showBarcodePopup" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Generated Animal Barcodes</h5>
+              <button type="button" class="btn-close" (click)="closeBarcodePopup()"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2">
+                <small class="text-muted">Registration: <strong>{{ barcodePopupData?.registrationBarcode }}</strong> | Owner: <strong>{{ barcodePopupData?.ownerName }}</strong> <span *ngIf="barcodePopupData?.ownerCode">({{ barcodePopupData?.ownerCode }})</span></small>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>#</th><th>Animal ID</th><th>Animal</th><th>Species</th><th>Barcode</th><th>Preview</th><th>Count</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let a of barcodePopupData?.animals; let i = index">
+                      <td>{{ i + 1 }}</td>
+                      <td><code>{{ a.animalCode || '-' }}</code></td>
+                      <td>{{ a.animalName }}</td>
+                      <td>{{ a.speciesName }}</td>
+                      <td><code>{{ a.barcode }}</code></td>
+                      <td><svg #barcodeSvg [attr.data-code]="a.barcode" width="120" height="30"></svg></td>
+                      <td><input type="number" class="form-control form-control-sm" style="width:60px" min="1" [(ngModel)]="a.printCount" name="count_{{a.id}}"></td>
+                      <td>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" (click)="printSingleBarcode(a.id, barcodePopupData!.registrationId, a.printCount)">Print</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" (click)="printAllBarcodes(2)">Print All Labels</button>
+              <button type="button" class="btn btn-info" (click)="openSampleCollectionPopup()">Collect Sample</button>
+              <button type="button" class="btn btn-primary" (click)="closeBarcodePopup()">Done</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SAMPLE COLLECTION POPUP -->
+      <div class="modal-backdrop" *ngIf="showSamplePopup" (click)="closeSamplePopup()"></div>
+      <div class="modal d-block" *ngIf="showSamplePopup" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Sample Collection</h5>
+              <button type="button" class="btn-close" (click)="closeSamplePopup()"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <small class="text-muted">Registration: <strong>{{ sampleCollectionData?.registrationBarcode }}</strong> | Owner: <strong>{{ sampleCollectionData?.ownerName }}</strong> <span *ngIf="sampleCollectionData?.ownerCode">({{ sampleCollectionData?.ownerCode }})</span></small>
+              </div>
+              <h6 class="mb-2">Animals &amp; Barcodes</h6>
+              <div class="table-responsive mb-3">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>#</th><th>Animal ID</th><th>Animal</th><th>Species</th><th>Barcode</th><th>Preview</th><th>Count</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let a of sampleCollectionData?.animals; let i = index">
+                      <td>{{ i + 1 }}</td>
+                      <td><code>{{ a.animalCode || '-' }}</code></td>
+                      <td>{{ a.animalName }}</td>
+                      <td>{{ a.speciesName }}</td>
+                      <td><code>{{ a.barcode }}</code></td>
+                      <td><svg #printBarcodeSvg [attr.data-code]="a.barcode" width="120" height="30"></svg></td>
+                      <td><input type="number" class="form-control form-control-sm" style="width:60px" min="1" [(ngModel)]="a.printCount" name="scount_{{a.id}}"></td>
+                      <td>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" (click)="printSingleBarcode(a.id, sampleCollectionData!.registrationId, a.printCount)">Print</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <h6 class="mb-2">Sample Status</h6>
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Item Barcode</th><th>Species</th><th>Status</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let item of sampleCollectionData?.items">
+                      <td><code>{{ item.itemBarcode }}</code></td>
+                      <td>{{ item.speciesName || '-' }}</td>
+                      <td><span class="badge" [ngClass]="sampleStatusColor(item.sampleStatus)">{{ item.sampleStatus }}</span></td>
+                      <td>
+                        <button *ngIf="item.sampleStatus === 'NotCollected'" class="btn btn-outline-success btn-sm" type="button" (click)="collectSample(item.id)">Collect</button>
+                        <button *ngIf="item.sampleStatus === 'Collected'" class="btn btn-outline-primary btn-sm" type="button" (click)="receiveSample(item.id)">Receive</button>
+                        <span *ngIf="item.sampleStatus === 'Received' || item.sampleStatus === 'Processing' || item.sampleStatus === 'Processed'" class="text-muted small">—</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-success" (click)="collectAllSamples()">Collect All Samples</button>
+              <button type="button" class="btn btn-outline-secondary" (click)="printAllBarcodes(2)">Print All Labels</button>
+              <button type="button" class="btn btn-primary" (click)="closeSamplePopup()">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /reg-container -->
   `,
   styles: [`
     .reg-container { padding: 1rem 0 2rem; }
@@ -552,12 +708,16 @@ type CreateDto = {
     .owner-results { position: absolute; z-index: 10; background: white; border: 1px solid var(--color-border); border-radius: 0.375rem; width: 100%; max-height: 220px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 2px; }
     .owner-result-item { display: flex; gap: 0.5rem; align-items: center; width: 100%; padding: 0.5rem 0.75rem; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.875rem; }
     .owner-result-item:hover { background: #f1f5f9; }
+    .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1040; }
+    .modal { z-index: 1050; }
   `],
 })
-export class RegistrationFormComponent {
+export class RegistrationFormComponent implements AfterViewInit {
   private http = inject(HttpClient);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private ngZone = inject(NgZone);
+  private cdr = inject(ChangeDetectorRef);
 
   editMode = false;
   editId: number | null = null;
@@ -597,6 +757,21 @@ export class RegistrationFormComponent {
   ownerSearchResults: OwnerOption[] = [];
   ownerSearchLoading = false;
   private ownerSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Barcode popup after save
+  showBarcodePopup = false;
+  barcodePopupData: BarcodePopupData | null = null;
+
+  // Sample collection popup
+  showSamplePopup = false;
+  sampleCollectionData: SampleCollectionData | null = null;
+
+  // Payment history (edit mode)
+  existingPayments: { id: number; method: string; amount: number; paidAt: string; reference?: string; currency: string }[] = [];
+  paymentStatus = 'Unpaid';
+
+  @ViewChildren('barcodeSvg') barcodeSvgs!: QueryList<ElementRef<SVGSVGElement>>;
+  @ViewChildren('printBarcodeSvg') printBarcodeSvgs!: QueryList<ElementRef<SVGSVGElement>>;
 
   // Discount
   discountType: DiscountType | null = null;
@@ -778,6 +953,37 @@ export class RegistrationFormComponent {
 
   // --- Lifecycle ---
 
+  ngAfterViewInit() {
+    // Barcode rendering is triggered after popups open via renderBarcodes()
+  }
+
+  private renderBarcodes() {
+    setTimeout(() => {
+      this.barcodeSvgs?.forEach((el) => {
+        try {
+          JsBarcode(el.nativeElement, el.nativeElement.getAttribute('data-code') || '', {
+            format: 'CODE128',
+            width: 1.5,
+            height: 40,
+            displayValue: false,
+            margin: 0,
+          });
+        } catch {}
+      });
+      this.printBarcodeSvgs?.forEach((el) => {
+        try {
+          JsBarcode(el.nativeElement, el.nativeElement.getAttribute('data-code') || '', {
+            format: 'CODE128',
+            width: 2,
+            height: 50,
+            displayValue: false,
+            margin: 0,
+          });
+        } catch {}
+      });
+    }, 50);
+  }
+
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (id && id !== 'new') {
@@ -805,6 +1011,17 @@ export class RegistrationFormComponent {
         this.ageUnit = reg.ageUnit ?? AgeUnit.Years;
         this.discountType = reg.discountType ?? null;
         this.discountValue = reg.discountValue ?? null;
+
+        // Load payment history
+        this.existingPayments = (reg.payments ?? []).map((p: any) => ({
+          id: p.id,
+          method: p.method,
+          amount: p.amount,
+          paidAt: p.paidAt,
+          reference: p.reference,
+          currency: p.currency,
+        }));
+        this.paymentStatus = reg.paymentStatus ?? 'Unpaid';
 
         if (reg.animals?.length) {
           this.model.animals = reg.animals.map((a: any) => ({
@@ -870,12 +1087,18 @@ export class RegistrationFormComponent {
         })
         .subscribe({
           next: (res) => {
-            this.ownerSearchResults = res.items ?? [];
-            this.ownerSearchLoading = false;
+            this.ngZone.run(() => {
+              this.ownerSearchResults = res.items ?? [];
+              this.ownerSearchLoading = false;
+              this.cdr.detectChanges();
+            });
           },
           error: () => {
-            this.ownerSearchResults = [];
-            this.ownerSearchLoading = false;
+            this.ngZone.run(() => {
+              this.ownerSearchResults = [];
+              this.ownerSearchLoading = false;
+              this.cdr.detectChanges();
+            });
           },
         });
     }, 350);
@@ -1226,14 +1449,224 @@ export class RegistrationFormComponent {
 
     request.subscribe({
       next: (res) => {
-        this.saving = false;
-        this.successMessage = res?.barcode ? `Registration ${this.editMode ? 'updated' : 'created'}: ${res.barcode}` : `Registration ${this.editMode ? 'updated' : 'created'}.`;
-        void this.router.navigate(['/registrations']);
+        this.ngZone.run(() => {
+          this.saving = false;
+          const regId = (res as any)?.id ?? this.editId;
+          this.editId = regId;
+          this.successMessage = res?.barcode
+            ? `Registration ${this.editMode ? 'updated' : 'created'}: ${res.barcode}`
+            : `Registration ${this.editMode ? 'updated' : 'created'}.`;
+          this.recalculateTotals();
+          this.cdr.detectChanges();
+
+          if (!this.editMode && regId) {
+            this.loadBarcodesAndShowPopup(regId);
+          }
+        });
       },
       error: (err) => {
-        this.saving = false;
-        this.errorMessage = err?.error ?? 'Failed to save registration.';
+        this.ngZone.run(() => {
+          this.saving = false;
+          this.errorMessage = err?.error ?? 'Failed to save registration.';
+          this.cdr.detectChanges();
+        });
       },
     });
+  }
+
+  // --- Barcode Popup ---
+
+  loadBarcodesAndShowPopup(regId: number) {
+    this.http.get<any>(`/api/registrations/${regId}/barcodes`).subscribe({
+      next: (data) => {
+        this.ngZone.run(() => {
+          this.barcodePopupData = {
+            registrationId: regId,
+            registrationBarcode: data.registrationBarcode,
+            ownerName: data.ownerName,
+            ownerCode: data.ownerCode,
+            animals: (data.animals ?? []).map((a: any) => ({ ...a, printCount: 2 })),
+          };
+          this.showBarcodePopup = true;
+          this.cdr.detectChanges();
+          this.renderBarcodes();
+        });
+      },
+      error: () => {},
+    });
+  }
+
+  closeBarcodePopup() {
+    this.showBarcodePopup = false;
+    this.barcodePopupData = null;
+  }
+
+  // --- Sample Collection Popup ---
+
+  openSampleCollectionPopup() {
+    if (!this.editId) return;
+    this.http.get<any>(`/api/registrations/${this.editId}`).subscribe({
+      next: (reg) => {
+        this.ngZone.run(() => {
+          const items = (reg.items ?? []).map((i: any) => ({
+            id: i.id,
+            itemBarcode: i.itemBarcode,
+            sampleStatus: i.sampleStatus,
+            speciesId: i.speciesId,
+            speciesName: i.speciesId ? this.species.find(s => s.id === i.speciesId)?.name : undefined,
+            collectedAt: i.sampleCollectedAt ?? undefined,
+          }));
+          this.sampleCollectionData = {
+            registrationId: reg.id,
+            registrationBarcode: reg.barcode,
+            ownerName: reg.ownerName,
+            ownerCode: reg.ownerCode,
+            items,
+            animals: (reg.animals ?? []).map((a: any) => {
+              const animalSpeciesItems = items.filter((i: any) => i.speciesId === a.speciesId);
+              const allCollected = animalSpeciesItems.length > 0 && animalSpeciesItems.every((i: any) => i.sampleStatus !== 'NotCollected');
+              const lastCollected = animalSpeciesItems
+                .filter((i: any) => i.collectedAt)
+                .map((i: any) => i.collectedAt)
+                .sort()
+                .pop();
+              return {
+                id: a.id,
+                animalName: a.animalName,
+                speciesName: this.species.find(s => s.id === a.speciesId)?.name ?? 'Unknown',
+                barcode: a.barcode ?? '',
+                speciesId: a.speciesId,
+                collectedAt: lastCollected,
+                allCollected,
+                printCount: 2,
+                animalCode: a.animalCode,
+              };
+            }),
+          };
+          this.showSamplePopup = true;
+          this.showBarcodePopup = false;
+          this.cdr.detectChanges();
+          this.renderBarcodes();
+        });
+      },
+    });
+  }
+
+  closeSamplePopup() {
+    this.showSamplePopup = false;
+    this.sampleCollectionData = null;
+  }
+
+  collectSample(itemId: number) {
+    this.http.post(`/api/registrations/items/${itemId}/collect`, { notes: null }).subscribe({
+      next: () => {
+        this.ngZone.run(() => {
+          const regId = this.sampleCollectionData?.registrationId ?? this.editId;
+          this.showSamplePopup = false;
+          this.sampleCollectionData = null;
+          this.cdr.detectChanges();
+          if (regId) this.loadBarcodesAndShowPopup(regId);
+        });
+      },
+      error: (err) => alert(err?.error ?? 'Failed to collect sample.'),
+    });
+  }
+
+  receiveSample(itemId: number) {
+    this.http.post(`/api/registrations/items/${itemId}/receive`, { notes: null }).subscribe({
+      next: () => {
+        this.ngZone.run(() => {
+          this.openSampleCollectionPopup();
+        });
+      },
+      error: (err) => alert(err?.error ?? 'Failed to receive sample.'),
+    });
+  }
+
+  collectAllSamples() {
+    if (!this.sampleCollectionData) return;
+    const uncollected = this.sampleCollectionData.items.filter(i => i.sampleStatus === 'NotCollected');
+    if (!uncollected.length) {
+      alert('All samples are already collected.');
+      return;
+    }
+    let completed = 0;
+    for (const item of uncollected) {
+      this.http.post(`/api/registrations/items/${item.id}/collect`, { notes: null }).subscribe({
+        next: () => {
+          completed++;
+          if (completed === uncollected.length) {
+            this.ngZone.run(() => {
+              const regId = this.sampleCollectionData?.registrationId ?? this.editId;
+              this.showSamplePopup = false;
+              this.sampleCollectionData = null;
+              this.cdr.detectChanges();
+              if (regId) this.loadBarcodesAndShowPopup(regId);
+            });
+          }
+        },
+        error: () => {
+          completed++;
+          if (completed === uncollected.length) {
+            this.ngZone.run(() => {
+              const regId = this.sampleCollectionData?.registrationId ?? this.editId;
+              this.showSamplePopup = false;
+              this.sampleCollectionData = null;
+              this.cdr.detectChanges();
+              if (regId) this.loadBarcodesAndShowPopup(regId);
+            });
+          }
+        },
+      });
+    }
+  }
+
+  // --- Barcode Printing ---
+
+  printAllBarcodes(count: number = 2) {
+    const regId = this.barcodePopupData?.registrationId ?? this.sampleCollectionData?.registrationId;
+    if (!regId) return;
+    this.http.get(`/api/registrations/${regId}/barcodes/pdf`, {
+      params: { count },
+      responseType: 'blob',
+    }).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => alert('Failed to generate barcode PDF.'),
+    });
+  }
+
+  printSingleBarcode(animalId: number, registrationId: number, count: number = 2) {
+    this.http.get(`/api/registrations/animals/${animalId}/barcode/pdf`, {
+      params: { count },
+      responseType: 'blob',
+    }).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => alert('Failed to generate barcode PDF.'),
+    });
+  }
+
+  printAllBarcodesFromPopup() {
+    this.printAllBarcodes(2);
+  }
+
+  // --- Helpers for popups ---
+
+  sampleStatusColor(status: string): string {
+    switch (status) {
+      case 'NotCollected': return 'bg-secondary';
+      case 'Collected': return 'bg-info text-dark';
+      case 'Received': return 'bg-primary';
+      case 'Processing': return 'bg-warning text-dark';
+      case 'Processed': return 'bg-success';
+      default: return 'bg-secondary';
+    }
   }
 }

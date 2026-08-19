@@ -9,5 +9,6 @@ public class RegistrationAnimal : BaseEntity
     public int SpeciesId { get; set; }
     public Species Species { get; set; } = default!;
     public string AnimalName { get; set; } = default!;
+    public string? Barcode { get; set; }
     public int? AgeInDays { get; set; }
 }

@@ -483,6 +483,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Prefix")
+                        .IsUnique();
+
                     b.ToTable("barcode_sequences", (string)null);
                 });
 
@@ -3301,6 +3304,10 @@ namespace VetLims.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3337,6 +3344,10 @@ namespace VetLims.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AnimalId");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique()
+                        .HasFilter("\"Barcode\" IS NOT NULL");
 
                     b.HasIndex("RegistrationId");
 
@@ -3404,6 +3415,15 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<int>("RegistrationId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RerunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RerunInitiatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RerunReason")
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("SampleCollectedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3512,6 +3532,12 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int?>("PathologistAuthenticatedById")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RegistrationAnimalId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RegistrationItemId")
                         .HasColumnType("integer");
 
@@ -3525,6 +3551,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int?>("TechnicianVerifiedById")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3537,6 +3566,8 @@ namespace VetLims.Infrastructure.Migrations
                     b.HasIndex("BranchId");
 
                     b.HasIndex("ClinicId");
+
+                    b.HasIndex("RegistrationAnimalId");
 
                     b.HasIndex("RegistrationItemId");
 
@@ -5414,6 +5445,11 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("ClinicId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("VetLims.Infrastructure.Entities.RegistrationAnimal", "RegistrationAnimal")
+                        .WithMany()
+                        .HasForeignKey("RegistrationAnimalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("VetLims.Infrastructure.Entities.RegistrationItem", "RegistrationItem")
                         .WithMany()
                         .HasForeignKey("RegistrationItemId")
@@ -5423,6 +5459,8 @@ namespace VetLims.Infrastructure.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("Clinic");
+
+                    b.Navigation("RegistrationAnimal");
 
                     b.Navigation("RegistrationItem");
                 });

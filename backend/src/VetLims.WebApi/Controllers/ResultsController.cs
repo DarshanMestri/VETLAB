@@ -9,7 +9,7 @@ using VetLims.WebApi.Reporting;
 
 namespace VetLims.WebApi.Controllers;
 
-[Authorize] // tighten with policy if needed
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class ResultsController : ControllerBase
@@ -25,7 +25,6 @@ public class ResultsController : ControllerBase
     }
 
     /// Worklist: filter by test, department, barcode, status, owner
-    /// GET /api/results/worklist?departmentId=&testId=&barcode=&status=Pending|InProgress&owner=&ownerId=
     [HttpGet("worklist")]
     public async Task<ActionResult<IEnumerable<ResultWorkItemDto>>> Worklist(
         [FromQuery] int? departmentId, [FromQuery] int? testId, [FromQuery] string? barcode,
@@ -37,7 +36,7 @@ public class ResultsController : ControllerBase
             .ThenInclude(r => r.Animals)
             .ThenInclude(a => a.Species)
             .Include(ri => ri.Species)
-            .Where(ri => ri.ItemType == RegItemType.Test); // result entry per Test items
+            .Where(ri => ri.ItemType == RegItemType.Test);
 
         if (!string.IsNullOrWhiteSpace(barcode))
         {
@@ -62,7 +61,6 @@ public class ResultsController : ControllerBase
 
         if (departmentId.HasValue)
         {
-            // Join to Test to filter by Department
             q = q.Where(ri => _db.Tests.Any(t => t.Id == ri.ItemId && t.DepartmentId == departmentId.Value));
         }
 
@@ -79,7 +77,6 @@ public class ResultsController : ControllerBase
         }
         else
         {
-            // default: show not completed
             q = q.Where(ri => ri.Status == RegItemStatus.Pending || ri.Status == RegItemStatus.InProgress);
         }
 
@@ -90,6 +87,7 @@ public class ResultsController : ControllerBase
                 ri.Id,
                 ri.RegistrationId,
                 ri.Registration.OwnerName,
+                ri.Registration.OwnerNameAr,
                 ri.Registration.OwnerMobile,
                 ri.ItemBarcode,
                 TestCode = _db.Tests.Where(t => t.Id == ri.ItemId).Select(t => t.Code).FirstOrDefault()!,
@@ -103,7 +101,8 @@ public class ResultsController : ControllerBase
                 PathologistAuthenticated = _db.Results.Any(r => r.RegistrationItemId == ri.Id && r.PathologistAuthenticatedAt != null),
                 AnimalNames = ri.Registration.Animals.Select(a => a.AnimalName).ToList(),
                 AnimalSpecies = ri.Registration.Animals.Select(a => a.Species.Name).ToList(),
-                AnimalCount = ri.Registration.Animals.Count
+                AnimalCount = ri.Registration.Animals.Count,
+                RerunReason = ri.RerunReason
             })
             .ToListAsync();
 
@@ -111,6 +110,8 @@ public class ResultsController : ControllerBase
             r.Id,
             r.RegistrationId,
             r.OwnerName,
+            r.OwnerNameAr,
+            r.OwnerMobile,
             r.ItemBarcode,
             r.TestCode,
             r.TestName,
@@ -123,7 +124,7 @@ public class ResultsController : ControllerBase
             r.PathologistAuthenticated,
             string.Join(", ", r.AnimalNames.Zip(r.AnimalSpecies, (n, s) => $"{n} ({s})")),
             r.AnimalCount,
-            r.OwnerMobile
+            r.RerunReason
         ));
 
         return Ok(list);
@@ -135,7 +136,10 @@ public class ResultsController : ControllerBase
     {
         var item = await _db.RegistrationItems
             .Include(ri => ri.Registration)
-            .ThenInclude(r => r.Animals) // ✅ ensures Animals are loaded
+                .ThenInclude(r => r.Owner)
+            .Include(ri => ri.Registration)
+                .ThenInclude(r => r.Animals)
+                    .ThenInclude(a => a.Species)
             .FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
 
@@ -159,14 +163,13 @@ public class ResultsController : ControllerBase
             .ToListAsync();
 
         var values = new List<ResultValueDto>();
-        var ageDays = item.Registration.Animals.FirstOrDefault()?.AgeInDays; // if present
+        var ageDays = item.Registration.Animals.FirstOrDefault()?.AgeInDays;
         var speciesId = item.SpeciesId;
 
         foreach (var p in parameters)
         {
             var existing = result.Values.FirstOrDefault(v => v.TestParameterId == p.Id);
 
-            // compute range context
             var (minD, maxD, low, high) = await _rr.PickRangeAsync(p.Id, speciesId, ageDays);
             decimal? num = existing?.NumericValue;
             var flags = _rr.Evaluate(num, low, high);
@@ -188,11 +191,27 @@ public class ResultsController : ControllerBase
             ));
         }
 
+        // Build animal list
+        var animals = item.Registration.Animals
+            .OrderBy(a => a.Id)
+            .Select(a => new ResultAnimalDto(
+                a.Id,
+                a.AnimalName,
+                a.SpeciesId,
+                a.Species?.Name,
+                a.AnimalId,
+                a.AgeInDays
+            ))
+            .ToList();
+
+        var owner = item.Registration.Owner;
+
         return Ok(new ResultDetailDto(
             item.Id,
             item.ItemBarcode,
             result.Notes,
             item.SampleStatus.ToString(),
+            item.Status.ToString(),
             result.TechnicianVerifiedBy,
             result.TechnicianVerifiedAt,
             result.PathologistAuthenticatedBy,
@@ -200,9 +219,17 @@ public class ResultsController : ControllerBase
             result.DigitalSignature,
             result.VerificationRemarks,
             values,
+            animals,
             item.Registration.OwnerName,
-            string.Join(", ", item.Registration.Animals.Select(a => a.AnimalName)),
-            item.Registration.Animals.Count));
+            item.Registration.OwnerNameAr,
+            item.Registration.OwnerMobile,
+            owner?.Email,
+            owner?.Code,
+            item.Registration.OwnerId,
+            item.Registration.ClientId,
+            item.RerunReason,
+            item.RerunInitiatedBy,
+            item.RerunAt));
     }
 
     [HttpGet("{registrationItemId:int}/report")]
@@ -291,9 +318,9 @@ public class ResultsController : ControllerBase
             rv.UnitSymbol = param.Unit?.Symbol;
 
             var speciesId = item.SpeciesId;
-            var ageDays = firstAnimal?.AgeInDays;
+            var ageDaysForRange = firstAnimal?.AgeInDays;
 
-            var (minD, maxD, low, high) = await _rr.PickRangeAsync(param.Id, speciesId, ageDays);
+            var (minD, maxD, low, high) = await _rr.PickRangeAsync(param.Id, speciesId, ageDaysForRange);
             rv.RangeMinDays = minD; rv.RangeMaxDays = maxD;
             rv.RangeLow = low; rv.RangeHigh = high;
 
@@ -308,7 +335,106 @@ public class ResultsController : ControllerBase
         return NoContent();
     }
 
-    /// Mark item completed
+    /// Technician verification — auto-captures the logged-in user
+    [HttpPost("{registrationItemId:int}/verify")]
+    public async Task<ActionResult> Verify(int registrationItemId, [FromBody] ResultVerificationDto dto)
+    {
+        var userId = _currentUserService.UserId;
+        var userName = _currentUserService.UserName;
+        if (userId == null || string.IsNullOrWhiteSpace(userName))
+            return BadRequest("Authenticated user context is required for verification.");
+
+        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
+        if (result is null) return NotFound();
+
+        result.TechnicianVerifiedBy = userName;
+        result.TechnicianVerifiedById = userId;
+        result.TechnicianVerifiedAt = DateTime.UtcNow;
+        result.VerificationRemarks = dto.Remarks?.Trim();
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// Pathologist authentication — auto-captures the logged-in user AND auto-completes the item
+    [HttpPost("{registrationItemId:int}/authenticate")]
+    public async Task<ActionResult> Authenticate(int registrationItemId, [FromBody] ResultAuthenticationDto dto)
+    {
+        var userId = _currentUserService.UserId;
+        var userName = _currentUserService.UserName;
+        if (userId == null || string.IsNullOrWhiteSpace(userName))
+            return BadRequest("Authenticated user context is required for authentication.");
+
+        // Only Admin and Manager roles may authenticate (pathologist-level)
+        var roles = _currentUserService.Roles;
+        if (!roles.Any(r => r == "Admin" || r == "Manager"))
+            return Forbid("Only Admin or Manager users may authenticate results.");
+
+        var item = await _db.RegistrationItems.FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
+        if (item is null) return NotFound();
+
+        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
+        if (result is null) return NotFound();
+        if (result.TechnicianVerifiedAt is null)
+            return BadRequest("Technician verification is required before authentication.");
+
+        // Auto-capture authenticated user
+        result.PathologistAuthenticatedBy = userName;
+        result.PathologistAuthenticatedById = userId;
+        result.PathologistAuthenticatedAt = DateTime.UtcNow;
+        result.DigitalSignature = dto.DigitalSignature?.Trim();
+        result.VerificationRemarks = dto.Remarks?.Trim() ?? result.VerificationRemarks;
+
+        // Auto-complete: authentication completes the test
+        item.Status = RegItemStatus.Completed;
+        item.SampleStatus = SampleWorkflowStatus.Processed;
+        result.CompletedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// Re-run: move a completed/authenticated result back to InProgress for the technician
+    [HttpPost("{registrationItemId:int}/rerun")]
+    public async Task<ActionResult> Rerun(int registrationItemId, [FromBody] ResultRerunDto dto)
+    {
+        var roles = _currentUserService.Roles;
+        if (!roles.Any(r => r == "Admin" || r == "Manager"))
+            return Forbid("Only Admin or Manager users may initiate a re-run.");
+
+        var item = await _db.RegistrationItems.FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
+        if (item is null) return NotFound();
+
+        if (item.Status != RegItemStatus.Completed)
+            return BadRequest("Only completed results can be moved back to pending for re-run.");
+
+        var userName = _currentUserService.UserName ?? "system";
+
+        // Reset status back to InProgress for the technician workflow
+        item.Status = RegItemStatus.InProgress;
+
+        // Preserve re-run audit trail
+        item.RerunReason = dto.Reason?.Trim();
+        item.RerunInitiatedBy = userName;
+        item.RerunAt = DateTime.UtcNow;
+
+        // Clear authentication/verification so they must be re-done
+        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
+        if (result != null)
+        {
+            result.TechnicianVerifiedBy = null;
+            result.TechnicianVerifiedById = null;
+            result.TechnicianVerifiedAt = null;
+            result.PathologistAuthenticatedBy = null;
+            result.PathologistAuthenticatedById = null;
+            result.PathologistAuthenticatedAt = null;
+            result.CompletedAt = null;
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// Mark item completed (kept for backward compatibility, but deprecated in favor of authenticate auto-complete)
     [HttpPost("{registrationItemId:int}/complete")]
     public async Task<ActionResult> Complete(int registrationItemId)
     {
@@ -331,41 +457,6 @@ public class ResultsController : ControllerBase
         var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
         if (result != null) result.CompletedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
-        return NoContent();
-    }
-
-    [HttpPost("{registrationItemId:int}/verify")]
-    public async Task<ActionResult> Verify(int registrationItemId, [FromBody] ResultVerificationDto dto)
-    {
-        if (string.IsNullOrWhiteSpace(dto.VerifiedBy))
-            return BadRequest("VerifiedBy is required.");
-
-        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
-        if (result is null) return NotFound();
-
-        result.TechnicianVerifiedBy = dto.VerifiedBy.Trim();
-        result.TechnicianVerifiedAt = DateTime.UtcNow;
-        result.VerificationRemarks = dto.Remarks?.Trim();
-        await _db.SaveChangesAsync();
-        return NoContent();
-    }
-
-    [HttpPost("{registrationItemId:int}/authenticate")]
-    public async Task<ActionResult> Authenticate(int registrationItemId, [FromBody] ResultAuthenticationDto dto)
-    {
-        if (string.IsNullOrWhiteSpace(dto.AuthenticatedBy))
-            return BadRequest("AuthenticatedBy is required.");
-
-        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
-        if (result is null) return NotFound();
-        if (result.TechnicianVerifiedAt is null)
-            return BadRequest("Technician verification is required before authentication.");
-
-        result.PathologistAuthenticatedBy = dto.AuthenticatedBy.Trim();
-        result.PathologistAuthenticatedAt = DateTime.UtcNow;
-        result.DigitalSignature = dto.DigitalSignature?.Trim();
-        result.VerificationRemarks = dto.Remarks?.Trim() ?? result.VerificationRemarks;
         await _db.SaveChangesAsync();
         return NoContent();
     }
