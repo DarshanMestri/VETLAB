@@ -705,7 +705,7 @@ type CreateDto = {
     .summary-label { font-size: 0.75rem; color: var(--color-secondary-text); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.1rem; }
     .summary-value { font-weight: 600; color: var(--color-main-text); margin-bottom: 0.5rem; }
     .summary-value-last { font-weight: 600; color: var(--color-main-text); }
-    .owner-results { position: absolute; z-index: 10; background: white; border: 1px solid var(--color-border); border-radius: 0.375rem; width: 100%; max-height: 220px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 2px; }
+    .owner-results { position: absolute; z-index: 10; background: white; border: 1px solid var(--color-border); border-radius: 0.375rem; width: 100%; max-height: 320px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 2px; }
     .owner-result-item { display: flex; gap: 0.5rem; align-items: center; width: 100%; padding: 0.5rem 0.75rem; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.875rem; }
     .owner-result-item:hover { background: #f1f5f9; }
     .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1040; }
