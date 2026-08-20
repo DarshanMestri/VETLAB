@@ -24,6 +24,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<LaboratoryGroup> LaboratoryGroups => Set<LaboratoryGroup>();
     public DbSet<Clinic> Clinics => Set<Clinic>();
+    public DbSet<Laboratory> Laboratories => Set<Laboratory>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<BranchDepartment> BranchDepartments => Set<BranchDepartment>();
     public DbSet<BranchTest> BranchTests => Set<BranchTest>();
@@ -435,6 +436,29 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.LicenseNumber).HasMaxLength(200);
             e.Property(x => x.Phone).HasMaxLength(30);
             e.Property(x => x.Email).HasMaxLength(200);
+            e.Property(x => x.Address).HasMaxLength(500);
+            e.Property(x => x.Logo).HasMaxLength(500);
+            e.Property(x => x.ReportHeader).HasColumnType("text");
+            e.Property(x => x.ReportFooter).HasColumnType("text");
+            e.Property(x => x.DigitalSignature).HasMaxLength(1000);
+            e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
+            e.HasIndex(x => x.Name);
+            e.HasOne(x => x.Organization)
+             .WithMany()
+             .HasForeignKey(x => x.OrganizationId)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Laboratory>(e =>
+        {
+            e.ToTable("laboratories");
+            e.Property(x => x.OrganizationId).IsRequired();
+            e.Property(x => x.Code).IsRequired().HasMaxLength(100);
+            e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            e.Property(x => x.ShortName).HasMaxLength(50);
+            e.Property(x => x.LicenseNumber).HasMaxLength(200);
+            e.Property(x => x.Phone).HasMaxLength(30);
+            e.Property(x => x.Email).HasMaxLength(200);
             e.Property(x => x.Gst).HasMaxLength(100);
             e.Property(x => x.RegistrationNumber).HasMaxLength(100);
             e.Property(x => x.WhatsAppNumber).HasMaxLength(30);
@@ -451,7 +475,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
              .HasForeignKey(x => x.OrganizationId)
              .OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.LaboratoryGroup)
-             .WithMany(x => x.Clinics)
+             .WithMany(x => x.Laboratories)
              .HasForeignKey(x => x.LaboratoryGroupId)
              .OnDelete(DeleteBehavior.Restrict);
         });
@@ -459,6 +483,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         modelBuilder.Entity<Branch>(e =>
         {
             e.ToTable("branches");
+            e.Property(x => x.OrganizationId).IsRequired();
             e.Property(x => x.Code).IsRequired().HasMaxLength(100);
             e.Property(x => x.Name).IsRequired().HasMaxLength(200);
             e.Property(x => x.LocationType).IsRequired();
@@ -471,11 +496,19 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.Manager).HasMaxLength(200);
             e.Property(x => x.Latitude).HasColumnType("numeric");
             e.Property(x => x.Longitude).HasColumnType("numeric");
-            e.HasIndex(x => new { x.ClinicId, x.Code }).IsUnique();
+            e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
+            e.HasOne(x => x.Organization)
+             .WithMany()
+             .HasForeignKey(x => x.OrganizationId)
+             .OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Clinic)
              .WithMany()
              .HasForeignKey(x => x.ClinicId)
-             .OnDelete(DeleteBehavior.Cascade);
+             .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Laboratory)
+             .WithMany()
+             .HasForeignKey(x => x.LaboratoryId)
+             .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<BranchDepartment>(e =>
@@ -518,10 +551,6 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         {
             e.Property(x => x.DisplayName).HasMaxLength(200);
             e.Property(x => x.OrganizationId);
-            e.HasOne(x => x.Clinic)
-             .WithMany()
-             .HasForeignKey(x => x.ClinicId)
-             .OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch)
              .WithMany()
              .HasForeignKey(x => x.BranchId)
@@ -536,6 +565,8 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         {
             e.ToTable("user_locations");
             e.Property(x => x.IsDefault).HasDefaultValue(false);
+            e.Property(x => x.HasClinicAccess).HasDefaultValue(true);
+            e.Property(x => x.HasLaboratoryAccess).HasDefaultValue(true);
             e.HasIndex(x => new { x.UserId, x.BranchId }).IsUnique();
             e.HasOne(x => x.User).WithMany(u => u.UserLocations).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.Cascade);
@@ -988,7 +1019,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.ClinicalNotes).HasMaxLength(2000);
             e.Property(x => x.TotalVat).HasColumnType("numeric(18,2)");
             e.HasIndex(x => x.Barcode).IsUnique();
-            e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Laboratory).WithMany().HasForeignKey(x => x.LaboratoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Client).WithMany().HasForeignKey(x => x.ClientId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.SetNull);
@@ -1019,7 +1050,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.HasIndex(x => x.ItemBarcode).IsUnique();
 
             e.HasOne(x => x.Registration).WithMany(r => r.Items).HasForeignKey(x => x.RegistrationId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Laboratory).WithMany().HasForeignKey(x => x.LaboratoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Species).WithMany().HasForeignKey(x => x.SpeciesId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.SampleType).WithMany().HasForeignKey(x => x.SampleTypeId).OnDelete(DeleteBehavior.SetNull);
@@ -1032,7 +1063,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.Amount).HasColumnType("numeric(18,2)");
             e.Property(x => x.Currency).HasMaxLength(10);
             e.HasOne(x => x.Registration).WithMany(r => r.Payments).HasForeignKey(x => x.RegistrationId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Laboratory).WithMany().HasForeignKey(x => x.LaboratoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -1060,7 +1091,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             .WithMany()
             .HasForeignKey(x => x.RegistrationAnimalId)
             .OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Laboratory).WithMany().HasForeignKey(x => x.LaboratoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -1078,7 +1109,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             .HasForeignKey(x => x.ResultId)
             .OnDelete(DeleteBehavior.Cascade);
 
-            e.HasOne(x => x.Clinic).WithMany().HasForeignKey(x => x.ClinicId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Laboratory).WithMany().HasForeignKey(x => x.LaboratoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.SetNull);
 
             e.HasOne(x => x.TestParameter)

@@ -2,13 +2,19 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  BranchAccess,
   BranchOption,
-  ClinicOption,
   CreateUserRequest,
+  OrganizationOption,
   RoleOption,
   UserListItem,
   UsersService,
 } from './users.service';
+
+interface BranchAccessEntry {
+  clinicAccess: boolean;
+  laboratoryAccess: boolean;
+}
 
 interface UserForm {
   userName: string;
@@ -16,8 +22,7 @@ interface UserForm {
   displayName: string;
   password: string;
   roleName: string;
-  clinicId: number | null;
-  branchId: number | null;
+  organizationId: number | null;
   isActive: boolean;
 }
 
@@ -71,7 +76,7 @@ interface UserForm {
                 <tr>
                   <th>User</th>
                   <th>Role</th>
-                  <th>Location</th>
+                  <th>Organization</th>
                   <th>Status</th>
                   <th class="text-end">Action</th>
                 </tr>
@@ -86,10 +91,7 @@ interface UserForm {
                     <span class="role-tag">{{ user.roles.join(', ') || 'Unassigned' }}</span>
                   </td>
                   <td>
-                    <span>{{ clinicName(user.clinicId) }}</span>
-                    <small *ngIf="user.branchId">{{
-                      branchName(user.clinicId, user.branchId)
-                    }}</small>
+                    <span>{{ organizationName(user.organizationId) }}</span>
                   </td>
                   <td>
                     <span class="status" [class.status-active]="user.isActive">
@@ -133,8 +135,8 @@ interface UserForm {
             <h2 id="create-heading">{{ isEditing() ? 'Edit User' : 'Create User' }}</h2>
             <p>{{
               isEditing()
-                ? 'Update identity, role, and laboratory access.'
-                : 'Assign identity, role, and laboratory access.'
+                ? 'Update identity, role, and branch access.'
+                : 'Assign identity, role, and branch access.'
             }}</p>
           </div>
 
@@ -203,36 +205,55 @@ interface UserForm {
                 </select>
               </label>
 
-              <label class="form-label">
-                Laboratory
+              <label class="form-label full-width">
+                Organization <span class="text-danger">*</span>
                 <select
                   class="form-select"
-                  name="clinicId"
-                  [(ngModel)]="form.clinicId"
-                  (ngModelChange)="onClinicChange()"
+                  name="organizationId"
+                  [(ngModel)]="form.organizationId"
+                  (ngModelChange)="onOrganizationChange()"
                   required
                 >
-                  <option [ngValue]="null" disabled>Select laboratory</option>
-                  <option *ngFor="let clinic of clinics()" [ngValue]="clinic.clinicId">
-                    {{ clinic.clinicName }}
-                  </option>
+                  <option [ngValue]="null" disabled>Select organization</option>
+                  @for(org of organizations(); track org.id) {
+                    <option [ngValue]="org.id">{{org.name}}</option>
+                  }
                 </select>
               </label>
 
-              <label class="form-label full-width">
-                Branch
-                <select
-                  class="form-select"
-                  name="branchId"
-                  [(ngModel)]="form.branchId"
-                  [disabled]="!form.clinicId"
-                >
-                  <option [ngValue]="null">All / no default branch</option>
-                  <option *ngFor="let branch of availableBranches()" [ngValue]="branch.branchId">
-                    {{ branch.branchName }}
-                  </option>
-                </select>
-              </label>
+              @if (form.organizationId && availableBranches().length > 0) {
+                <div class="full-width">
+                  <label class="form-label">Branch Access</label>
+                  <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                      <thead class="table-light">
+                        <tr>
+                          <th>Branch</th>
+                          <th class="text-center" style="width:100px">Clinic</th>
+                          <th class="text-center" style="width:100px">Laboratory</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for(branch of availableBranches(); track branch.id) {
+                          <tr>
+                            <td>{{branch.name}} ({{branch.code}})</td>
+                            <td class="text-center">
+                              <input type="checkbox" class="form-check-input"
+                                [checked]="getBranchAccess(branch.id).clinicAccess"
+                                (change)="toggleBranchAccess(branch.id, 'clinic', $event)">
+                            </td>
+                            <td class="text-center">
+                              <input type="checkbox" class="form-check-input"
+                                [checked]="getBranchAccess(branch.id).laboratoryAccess"
+                                (change)="toggleBranchAccess(branch.id, 'laboratory', $event)">
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              }
             </div>
 
             <label class="active-control">
@@ -524,7 +545,8 @@ export class UsersMasterComponent implements OnInit {
 
   readonly users = signal<UserListItem[]>([]);
   readonly roles = signal<RoleOption[]>([]);
-  readonly clinics = signal<ClinicOption[]>([]);
+  readonly organizations = signal<OrganizationOption[]>([]);
+  readonly availableBranches = signal<BranchOption[]>([]);
   readonly search = signal('');
   readonly loading = signal(false);
   readonly saving = signal(false);
@@ -536,6 +558,7 @@ export class UsersMasterComponent implements OnInit {
   readonly isEditing = computed(() => this.editingUser() !== null);
 
   form: UserForm = this.emptyForm();
+  branchAccessMap = new Map<number, BranchAccessEntry>();
 
   readonly filteredUsers = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -547,19 +570,15 @@ export class UsersMasterComponent implements OnInit {
     );
   });
 
-  availableBranches(): BranchOption[] {
-    return this.clinics().find((clinic) => clinic.clinicId === this.form.clinicId)?.branches ?? [];
-  }
-
   ngOnInit(): void {
     this.loadUsers();
     this.usersService.listRoles().subscribe({
       next: (roles) => this.roles.set(roles),
       error: (error) => this.showError(error, 'Unable to load roles.'),
     });
-    this.usersService.listLocations().subscribe({
-      next: (clinics) => this.clinics.set(clinics),
-      error: (error) => this.showError(error, 'Unable to load laboratory locations.'),
+    this.usersService.listOrganizations().subscribe({
+      next: (orgs) => this.organizations.set(orgs),
+      error: (error) => this.showError(error, 'Unable to load organizations.'),
     });
   }
 
@@ -579,7 +598,7 @@ export class UsersMasterComponent implements OnInit {
   }
 
   createUser(valid: boolean | null): void {
-    if (!valid || !this.form.clinicId) return;
+    if (!valid || !this.form.organizationId) return;
     this.saving.set(true);
     this.error.set('');
     this.message.set('');
@@ -589,8 +608,8 @@ export class UsersMasterComponent implements OnInit {
       displayName: this.form.displayName,
       password: this.form.password,
       roleName: this.form.roleName,
-      clinicId: this.form.clinicId,
-      branchId: this.form.branchId,
+      organizationId: this.form.organizationId,
+      branchAccess: this.buildBranchAccess(),
       isActive: this.form.isActive,
     };
     this.usersService.create(request).subscribe({
@@ -619,10 +638,13 @@ export class UsersMasterComponent implements OnInit {
       displayName: user.displayName ?? '',
       password: '',
       roleName: user.roles[0] ?? '',
-      clinicId: user.clinicId,
-      branchId: user.branchId,
+      organizationId: user.organizationId,
       isActive: user.isActive,
     };
+    this.branchAccessMap = new Map();
+    if (user.organizationId) {
+      this.onOrganizationChange();
+    }
   }
 
   cancelEdit(): void {
@@ -641,7 +663,7 @@ export class UsersMasterComponent implements OnInit {
   }
 
   updateUser(valid: boolean | null): void {
-    if (!valid || !this.form.clinicId) return;
+    if (!valid || !this.form.organizationId) return;
     const editing = this.editingUser();
     if (!editing) return;
     this.saving.set(true);
@@ -653,8 +675,8 @@ export class UsersMasterComponent implements OnInit {
         email: this.form.email,
         displayName: this.form.displayName,
         roleName: this.form.roleName,
-        clinicId: this.form.clinicId,
-        branchId: this.form.branchId,
+        organizationId: this.form.organizationId,
+        branchAccess: this.buildBranchAccess(),
         isActive: this.form.isActive,
         newPassword: this.form.password || undefined,
       })
@@ -695,26 +717,52 @@ export class UsersMasterComponent implements OnInit {
     });
   }
 
-  onClinicChange(): void {
-    this.form.branchId = null;
+  onOrganizationChange(): void {
+    this.branchAccessMap = new Map();
+    this.availableBranches.set([]);
+    if (!this.form.organizationId) return;
+    this.usersService.listBranches(this.form.organizationId).subscribe({
+      next: (branches) => {
+        this.availableBranches.set(branches);
+        for (const b of branches) {
+          this.branchAccessMap.set(b.id, { clinicAccess: false, laboratoryAccess: false });
+        }
+      },
+      error: (error) => this.showError(error, 'Unable to load branches.'),
+    });
   }
 
   resetForm(): void {
     this.form = this.emptyForm();
+    this.branchAccessMap = new Map();
+    this.availableBranches.set([]);
   }
 
-  clinicName(clinicId: number | null): string {
-    return (
-      this.clinics().find((clinic) => clinic.clinicId === clinicId)?.clinicName ?? 'Not assigned'
-    );
+  organizationName(organizationId: number | null): string {
+    return this.organizations().find((o) => o.id === organizationId)?.name ?? 'Not assigned';
   }
 
-  branchName(clinicId: number | null, branchId: number): string {
-    return (
-      this.clinics()
-        .find((clinic) => clinic.clinicId === clinicId)
-        ?.branches.find((branch) => branch.branchId === branchId)?.branchName ?? 'Unknown branch'
-    );
+  getBranchAccess(branchId: number): BranchAccessEntry {
+    return this.branchAccessMap.get(branchId) ?? { clinicAccess: false, laboratoryAccess: false };
+  }
+
+  toggleBranchAccess(branchId: number, type: 'clinic' | 'laboratory', event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const entry = this.branchAccessMap.get(branchId) ?? { clinicAccess: false, laboratoryAccess: false };
+    if (type === 'clinic') {
+      entry.clinicAccess = checked;
+    } else {
+      entry.laboratoryAccess = checked;
+    }
+    this.branchAccessMap.set(branchId, { ...entry });
+  }
+
+  private buildBranchAccess(): BranchAccess[] {
+    return Array.from(this.branchAccessMap.entries()).map(([branchId, access]) => ({
+      branchId,
+      hasClinicAccess: access.clinicAccess,
+      hasLaboratoryAccess: access.laboratoryAccess,
+    }));
   }
 
   trackUser(_index: number, user: UserListItem): number {
@@ -728,8 +776,7 @@ export class UsersMasterComponent implements OnInit {
       displayName: '',
       password: '',
       roleName: '',
-      clinicId: null,
-      branchId: null,
+      organizationId: null,
       isActive: true,
     };
   }

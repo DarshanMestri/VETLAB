@@ -99,6 +99,14 @@ export const routes: Routes = [
   },
 
   {
+    path: 'clinics',
+    loadComponent: () =>
+      import('./features/clinics/clinics-list.component').then((m) => m.ClinicsListComponent),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
+  },
+
+  {
     path: 'units',
     loadComponent: () =>
       import('./features/masters/master-list.component').then((m) => m.MasterListComponent),

@@ -76,7 +76,7 @@ public sealed class ResultReportService
     {
         var item = await _db.RegistrationItems
             .AsNoTracking()
-            .Include(x => x.Clinic)
+            .Include(x => x.Laboratory)
             .Include(x => x.SampleType)
             .Include(x => x.Species)
             .Include(x => x.Registration)
@@ -122,14 +122,14 @@ public sealed class ResultReportService
         if (test is null)
             return null;
 
-        var clinic = item.Clinic;
-        if (clinic is null && result.ClinicId.HasValue)
-            clinic = await _db.Clinics.AsNoTracking().FirstOrDefaultAsync(x => x.Id == result.ClinicId.Value, cancellationToken);
-        clinic ??= await _db.Clinics.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Id).FirstOrDefaultAsync(cancellationToken);
+        var laboratory = item.Laboratory;
+        if (laboratory is null && result.LaboratoryId.HasValue)
+            laboratory = await _db.Laboratories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == result.LaboratoryId.Value, cancellationToken);
+        laboratory ??= await _db.Laboratories.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Id).FirstOrDefaultAsync(cancellationToken);
 
         var qrCodeBytes = BuildQrCodeBytes(item, result);
-        var logoAsset = ResolveAsset(clinic?.Logo);
-        var signatureAsset = ResolveAsset(result.DigitalSignature ?? clinic?.DigitalSignature);
+        var logoAsset = ResolveAsset(laboratory?.Logo);
+        var signatureAsset = ResolveAsset(result.DigitalSignature ?? laboratory?.DigitalSignature);
 
         var animals = item.Registration.Animals
             .OrderBy(x => x.Id)
@@ -168,12 +168,12 @@ public sealed class ResultReportService
             .ToList();
 
         return new ResultReportModel(
-            ClinicName: clinic?.Name ?? "Clinic",
-            ClinicAddress: clinic?.Address,
-            ClinicPhone: clinic?.Phone,
-            ClinicEmail: clinic?.Email,
-            ClinicHeader: clinic?.ReportHeader,
-            ClinicFooter: clinic?.ReportFooter,
+            ClinicName: laboratory?.Name ?? "Clinic",
+            ClinicAddress: laboratory?.Address,
+            ClinicPhone: laboratory?.Phone,
+            ClinicEmail: laboratory?.Email,
+            ClinicHeader: laboratory?.ReportHeader,
+            ClinicFooter: laboratory?.ReportFooter,
             ClinicLogo: logoAsset,
             Signature: signatureAsset,
             SignatureLabel: result.PathologistAuthenticatedBy ?? result.TechnicianVerifiedBy,

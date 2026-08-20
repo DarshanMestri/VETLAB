@@ -137,7 +137,7 @@
           <div *ngIf="error" class="alert alert-danger alert-anim" role="alert">{{ error }}</div>
 
           <div class="form-field field-1">
-            <label class="form-label" for="clinic">Lab Location</label>
+            <label class="form-label" for="organization">Organization</label>
             <div class="input-wrap">
               <span class="input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -146,23 +146,23 @@
                 </svg>
               </span>
               <select
-                id="clinic"
+                id="organization"
                 class="form-control"
-                [(ngModel)]="selectedClinicId"
-                name="clinicId"
-                (ngModelChange)="onClinicChange()"
-                [disabled]="loadingLocations"
+                [(ngModel)]="selectedOrganizationId"
+                name="organizationId"
+                (ngModelChange)="onOrganizationChange()"
+                [disabled]="loadingOrganizations"
                 required
               >
-                <option [ngValue]="null">Select lab location</option>
-                <option *ngFor="let clinic of locations" [ngValue]="clinic.clinicId">
-                  {{ clinic.clinicName }} ({{ clinic.clinicCode }})
+                <option [ngValue]="null">Select organization</option>
+                <option *ngFor="let org of organizations" [ngValue]="org.id">
+                  {{ org.name }} ({{ org.code }})
                 </option>
               </select>
             </div>
           </div>
 
-          <div class="form-field field-2" *ngIf="requiresBranchSelection">
+          <div class="form-field field-2">
             <label class="form-label" for="branch">Branch</label>
             <div class="input-wrap">
               <span class="input-icon" aria-hidden="true">
@@ -172,10 +172,17 @@
                   <path d="M2 17l10 5 10-5" />
                 </svg>
               </span>
-              <select id="branch" class="form-control" [(ngModel)]="selectedBranchId" name="branchId" required>
-                <option [ngValue]="null">Select branch</option>
-                <option *ngFor="let branch of selectedClinic?.branches ?? []" [ngValue]="branch.branchId">
-                  {{ branch.branchName }} ({{ branch.branchCode }})
+              <select
+                id="branch"
+                class="form-control"
+                [(ngModel)]="selectedBranchId"
+                name="branchId"
+                [disabled]="loadingBranches || !selectedOrganizationId"
+                required
+              >
+                <option [ngValue]="null">{{ loadingBranches ? 'Loading branches…' : 'Select branch' }}</option>
+                <option *ngFor="let branch of branches" [ngValue]="branch.id">
+                  {{ branch.name }} ({{ branch.code }})
                 </option>
               </select>
             </div>
@@ -225,10 +232,10 @@
             </div>
           </div>
 
-          <button class="btn-login field-5" type="submit" [disabled]="loadingLocations">
+          <button class="btn-login field-5" type="submit" [disabled]="loadingOrganizations || loadingBranches">
             <span class="btn-shine" aria-hidden="true"></span>
             <span class="btn-label">
-              {{ loadingLocations ? 'Loading locations…' : 'Sign In' }}
+              {{ loadingOrganizations ? 'Loading organizations…' : loadingBranches ? 'Loading branches…' : 'Sign In' }}
             </span>
             <svg
               class="btn-arrow"

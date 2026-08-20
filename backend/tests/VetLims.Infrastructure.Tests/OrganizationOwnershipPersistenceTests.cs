@@ -265,7 +265,9 @@ public sealed class OrganizationOwnershipPersistenceTests
         public int? UserId => null;
         public string? UserName { get; init; }
         public int? OrganizationId { get; init; }
-        public int? ClinicId => null;
+        public int? LaboratoryId => null;
+        public bool HasClinicAccess => false;
+        public bool HasLaboratoryAccess => false;
         public int? BranchId => null;
         public IReadOnlyCollection<int> BranchIds => Array.Empty<int>();
         public IReadOnlyCollection<string> Roles => Array.Empty<string>();

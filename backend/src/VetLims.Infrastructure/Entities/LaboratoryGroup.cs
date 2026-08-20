@@ -10,5 +10,5 @@ public class LaboratoryGroup : BaseEntity, IOrganizationOwned
 
     public bool IsActive { get; set; } = true;
 
-    public ICollection<Clinic> Clinics { get; set; } = new List<Clinic>();
+    public ICollection<Laboratory> Laboratories { get; set; } = new List<Laboratory>();
 }

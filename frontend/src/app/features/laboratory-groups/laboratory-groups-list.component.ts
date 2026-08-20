@@ -1,7 +1,7 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { LaboratoryGroupsService, LaboratoryGroupClinicItem, LaboratoryGroupListItem, ClinicListItem } from './laboratory-groups.service';
+import { LaboratoryGroupsService, LaboratoryGroupLaboratoryItem, LaboratoryGroupListItem, LaboratoryListItem } from './laboratory-groups.service';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -86,7 +86,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <td>{{ row.code }}</td>
               <td>{{ row.name }}</td>
               <td>{{ row.description || '—' }}</td>
-              <td>{{ row.clinicCount }}</td>
+              <td>{{ row.laboratoryCount }}</td>
               <td>
                 <span class="badge" [class.text-bg-success]="row.isActive" [class.text-bg-secondary]="!row.isActive">
                   {{ row.isActive ? 'Active' : 'Inactive' }}
@@ -185,7 +185,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
           <button class="btn btn-sm btn-outline-secondary" (click)="closeManage()">Close</button>
         </div>
         <div class="card-body">
-          <div *ngIf="!manageGroup.isActive" class="alert alert-warning mb-3">
+              <div *ngIf="!manageGroup.isActive" class="alert alert-warning mb-3">
             This laboratory group is inactive. New laboratory assignments are blocked by backend validation.
           </div>
 
@@ -193,18 +193,18 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             <div class="col-lg-6">
               <h5>Assigned Laboratories</h5>
               <div *ngIf="labsLoading()" class="text-muted">Loading assigned laboratories…</div>
-              <div *ngIf="!labsLoading() && assignedClinics.length === 0" class="text-muted">No laboratories assigned.</div>
-              <div class="list-group mt-3" *ngIf="assignedClinics.length">
-                <div *ngFor="let clinic of assignedClinics" class="list-group-item d-flex justify-content-between align-items-center gap-3">
+              <div *ngIf="!labsLoading() && assignedLaboratories.length === 0" class="text-muted">No laboratories assigned.</div>
+              <div class="list-group mt-3" *ngIf="assignedLaboratories.length">
+                <div *ngFor="let lab of assignedLaboratories" class="list-group-item d-flex justify-content-between align-items-center gap-3">
                   <div>
-                    <div class="fw-semibold">{{ clinic.name }}</div>
-                    <small class="text-muted">{{ clinic.code }} • {{ clinic.shortName || '—' }}</small>
+                    <div class="fw-semibold">{{ lab.name }}</div>
+                    <small class="text-muted">{{ lab.code }} • {{ lab.shortName || '—' }}</small>
                   </div>
                   <div class="d-flex align-items-center gap-2">
-                    <span class="badge" [class.text-bg-success]="clinic.isActive" [class.text-bg-secondary]="!clinic.isActive">
-                      {{ clinic.isActive ? 'Active' : 'Inactive' }}
+                    <span class="badge" [class.text-bg-success]="lab.isActive" [class.text-bg-secondary]="!lab.isActive">
+                      {{ lab.isActive ? 'Active' : 'Inactive' }}
                     </span>
-                    <button class="btn btn-sm btn-outline-danger" (click)="unassignClinic(clinic.id)">Unassign</button>
+                    <button class="btn btn-sm btn-outline-danger" (click)="unassignLaboratory(lab.id)">Unassign</button>
                   </div>
                 </div>
               </div>
@@ -213,14 +213,14 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             <div class="col-lg-6">
               <h5>Available Laboratories</h5>
               <div *ngIf="!manageGroup.isActive" class="text-muted">Assignments are disabled while this group is inactive.</div>
-              <div *ngIf="manageGroup.isActive && availableClinics.length === 0" class="text-muted">No available laboratories in this organization.</div>
-              <div class="list-group mt-3" *ngIf="manageGroup.isActive && availableClinics.length">
-                <div *ngFor="let clinic of availableClinics" class="list-group-item d-flex justify-content-between align-items-center gap-3">
+              <div *ngIf="manageGroup.isActive && availableLaboratories.length === 0" class="text-muted">No available laboratories in this organization.</div>
+              <div class="list-group mt-3" *ngIf="manageGroup.isActive && availableLaboratories.length">
+                <div *ngFor="let lab of availableLaboratories" class="list-group-item d-flex justify-content-between align-items-center gap-3">
                   <div>
-                    <div class="fw-semibold">{{ clinic.name }}</div>
-                    <small class="text-muted">{{ clinic.code }} • {{ clinic.shortName || '—' }}</small>
+                    <div class="fw-semibold">{{ lab.name }}</div>
+                    <small class="text-muted">{{ lab.code }} • {{ lab.shortName || '—' }}</small>
                   </div>
-                  <button class="btn btn-sm btn-primary" (click)="assignClinic(clinic.id)">Assign</button>
+                  <button class="btn btn-sm btn-primary" (click)="assignLaboratory(lab.id)">Assign</button>
                 </div>
               </div>
             </div>
@@ -248,8 +248,8 @@ export class LaboratoryGroupsListComponent implements OnInit {
   search = '';
   form = this.emptyForm();
   manageGroup: LaboratoryGroupListItem | null = null;
-  assignedClinics: LaboratoryGroupClinicItem[] = [];
-  availableClinics: ClinicListItem[] = [];
+  assignedLaboratories: LaboratoryGroupLaboratoryItem[] = [];
+  availableLaboratories: LaboratoryListItem[] = [];
   readonly Math = Math;
 
   ngOnInit(): void {
@@ -325,43 +325,43 @@ export class LaboratoryGroupsListComponent implements OnInit {
 
   closeManage(): void {
     this.manageGroup = null;
-    this.assignedClinics = [];
-    this.availableClinics = [];
+    this.assignedLaboratories = [];
+    this.availableLaboratories = [];
   }
 
   loadManagement(laboratoryGroupId: number): void {
     this.labsLoading.set(true);
     this.error.set('');
 
-    this.svc.getClinics(laboratoryGroupId).subscribe({
+    this.svc.getLaboratories(laboratoryGroupId).subscribe({
       next: (assigned) => {
-        this.assignedClinics = assigned ?? [];
+        this.assignedLaboratories = assigned ?? [];
 
-        this.svc.getAvailableClinics().subscribe({
-          next: (allClinics) => {
-            const assignedIds = new Set(this.assignedClinics.map((x) => x.id));
-            this.availableClinics = (allClinics ?? []).filter((clinic) => !assignedIds.has(clinic.id));
+        this.svc.getAvailableLaboratories().subscribe({
+          next: (allLabs) => {
+            const assignedIds = new Set(this.assignedLaboratories.map((x) => x.id));
+            this.availableLaboratories = (allLabs ?? []).filter((lab) => !assignedIds.has(lab.id));
             this.labsLoading.set(false);
           },
           error: (err) => {
             this.labsLoading.set(false);
-            this.availableClinics = [];
+            this.availableLaboratories = [];
             this.error.set(this.extractMessage(err));
           },
         });
       },
       error: (err) => {
         this.labsLoading.set(false);
-        this.assignedClinics = [];
+        this.assignedLaboratories = [];
         this.error.set(this.extractMessage(err));
       },
     });
   }
 
-  assignClinic(clinicId: number): void {
+  assignLaboratory(laboratoryId: number): void {
     if (!this.manageGroup) return;
 
-    this.svc.assignClinic(this.manageGroup.id, clinicId).subscribe({
+    this.svc.assignLaboratory(this.manageGroup.id, laboratoryId).subscribe({
       next: () => {
         this.loadManagement(this.manageGroup!.id);
         this.load();
@@ -372,11 +372,11 @@ export class LaboratoryGroupsListComponent implements OnInit {
     });
   }
 
-  unassignClinic(clinicId: number): void {
+  unassignLaboratory(laboratoryId: number): void {
     if (!this.manageGroup) return;
     if (!confirm('Are you sure you want to unassign this laboratory from the group?')) return;
 
-    this.svc.unassignClinic(this.manageGroup.id, clinicId).subscribe({
+    this.svc.unassignLaboratory(this.manageGroup.id, laboratoryId).subscribe({
       next: () => {
         this.loadManagement(this.manageGroup!.id);
         this.load();

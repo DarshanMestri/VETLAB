@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import {
-  HierarchyLab,
+  HierarchyBranch,
   HierarchyResponse,
   HierarchyUser,
   LoginHistoryItem,
@@ -20,7 +20,7 @@ type LoginFilter = 'all' | 'success' | 'failed';
       <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
         <div>
           <h2 class="mb-0">User Login &amp; Hierarchy</h2>
-          <small class="text-muted">Organization, laboratory and branch structure with login activity</small>
+          <small class="text-muted">Organization and branch structure with login activity</small>
         </div>
         <button class="btn btn-outline-secondary" type="button" (click)="loadAll()" [disabled]="loading() || loadingLogins()">
           {{ loading() || loadingLogins() ? 'Refreshing…' : 'Refresh' }}
@@ -48,65 +48,25 @@ type LoginFilter = 'all' | 'success' | 'failed';
                     <span class="badge text-bg-light ms-auto">{{ totalUsers() }} users</span>
                   </div>
 
-                  <div class="tree-level labs">
-                    <div class="tree-lab" *ngFor="let lab of tree.labs">
-                      <div class="tree-row lab">
+                  <div class="tree-level branches">
+                    <div class="tree-branch" *ngFor="let branch of tree.branches">
+                      <div class="tree-row branch">
                         <span class="tree-chevron">▾</span>
-                        <span class="tree-lab-icon">
-                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4"/><path d="M12 2v6l6.5 9.5A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-1.7-3.5L12 8"/></svg>
+                        <span class="tree-branch-icon">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
                         </span>
                         <div>
-                          <div class="fw-semibold">{{ lab.name }}</div>
-                          <small class="text-muted">Lab: {{ lab.code }}</small>
+                          <div class="fw-semibold">{{ branch.name }}</div>
+                          <small class="text-muted">Branch: {{ branch.code }}</small>
                         </div>
-                        <span class="badge ms-auto" [class.text-bg-success]="lab.isActive" [class.text-bg-secondary]="!lab.isActive">
-                          {{ lab.isActive ? 'Active' : 'Inactive' }}
-                        </span>
+                        <span class="badge text-bg-light ms-auto">{{ branch.users.length }} users</span>
                       </div>
-
-                      <div class="tree-level branches">
-                        <div class="tree-branch" *ngFor="let branch of lab.branches">
-                          <div class="tree-row branch">
-                            <span class="tree-chevron">▾</span>
-                            <span class="tree-branch-icon">
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
-                            </span>
-                            <div>
-                              <div class="fw-semibold">{{ branch.name }}</div>
-                              <small class="text-muted">Branch: {{ branch.code }}</small>
-                            </div>
-                            <span class="badge text-bg-light ms-auto">{{ branch.users.length }} users</span>
-                          </div>
-                          <div class="tree-users" *ngIf="branch.users.length">
-                            <div class="user-chip" *ngFor="let user of branch.users">
-                              <span class="user-dot" [class.online]="user.isActive"></span>
-                              <span class="user-name">{{ user.displayName || user.userName }}</span>
-                              <small class="user-login">{{ user.userName }}</small>
-                              <span class="badge ms-auto" [class]="roleBadge(user.roles[0])">{{ user.roles[0] || 'No role' }}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div class="tree-branch" *ngIf="lab.users.length">
-                          <div class="tree-row branch">
-                            <span class="tree-chevron">▾</span>
-                            <span class="tree-branch-icon">
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4"/><path d="M12 2v6l6.5 9.5A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-1.7-3.5L12 8"/><path d="M8.5 14h7"/></svg>
-                            </span>
-                            <div>
-                              <div class="fw-semibold">Lab-level users</div>
-                              <small class="text-muted">No branch assigned</small>
-                            </div>
-                            <span class="badge text-bg-light ms-auto">{{ lab.users.length }} users</span>
-                          </div>
-                          <div class="tree-users">
-                            <div class="user-chip" *ngFor="let user of lab.users">
-                              <span class="user-dot" [class.online]="user.isActive"></span>
-                              <span class="user-name">{{ user.displayName || user.userName }}</span>
-                              <small class="user-login">{{ user.userName }}</small>
-                              <span class="badge ms-auto" [class]="roleBadge(user.roles[0])">{{ user.roles[0] || 'No role' }}</span>
-                            </div>
-                          </div>
+                      <div class="tree-users" *ngIf="branch.users.length">
+                        <div class="user-chip" *ngFor="let user of branch.users">
+                          <span class="user-dot" [class.online]="user.isActive"></span>
+                          <span class="user-name">{{ user.displayName || user.userName }}</span>
+                          <small class="user-login">{{ user.userName }}</small>
+                          <span class="badge ms-auto" [class]="roleBadge(user.roles[0])">{{ user.roles[0] || 'No role' }}</span>
                         </div>
                       </div>
                     </div>
@@ -325,8 +285,8 @@ export class UserHierarchyComponent implements OnInit {
   totalUsers(): number {
     const tree = this.hierarchy();
     if (!tree) return 0;
-    const branchCount = tree.labs.reduce(
-      (sum, lab) => sum + lab.branches.reduce((s, b) => s + b.users.length, 0) + lab.users.length,
+    const branchCount = tree.branches.reduce(
+      (sum, branch) => sum + branch.users.length,
       0,
     );
     return branchCount + tree.unassigned.length;

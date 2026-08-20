@@ -23,8 +23,7 @@ public static class TestBranchAvailabilityService
             return false;
 
         var branch = await db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && !x.IsDeleted && x.IsActive && x.Clinic != null && x.Clinic.OrganizationId == organizationId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == branchId && !x.IsDeleted && x.IsActive && x.OrganizationId == organizationId, cancellationToken);
 
         if (branch is null)
             return false;

@@ -91,18 +91,22 @@ public record OrganizationDto(int Id, string Code, string Name, string? LegalNam
 public record OrganizationCreateDto(string Code, string Name, string? LegalName, string? Email, string? Phone, string? Address, bool IsActive = true);
 public record OrganizationUpdateDto(string Code, string Name, string? LegalName, string? Email, string? Phone, string? Address, bool IsActive = true);
 
-public record LaboratoryGroupDto(int Id, int OrganizationId, string Code, string Name, string? Description, bool IsActive, DateTime CreatedDate, DateTime? ModifiedDate, bool IsDeleted, int ClinicCount);
+public record LaboratoryGroupDto(int Id, int OrganizationId, string Code, string Name, string? Description, bool IsActive, DateTime CreatedDate, DateTime? ModifiedDate, bool IsDeleted, int LaboratoryCount);
 public record LaboratoryGroupCreateDto(string Code, string Name, string? Description, bool IsActive = true);
 public record LaboratoryGroupUpdateDto(string Code, string Name, string? Description, bool IsActive = true);
-public record LaboratoryGroupClinicDto(int Id, int OrganizationId, string Code, string Name, string? ShortName, bool IsActive, int? LaboratoryGroupId);
+public record LaboratoryGroupLaboratoryDto(int Id, int OrganizationId, string Code, string Name, string? ShortName, bool IsActive, int? LaboratoryGroupId);
 
-public record ClinicDto(int Id, int OrganizationId, int? LaboratoryGroupId, string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive);
-public record ClinicCreateDto(string Code, string Name, int? LaboratoryGroupId = null, string? Logo = null, string? Address = null, string? Phone = null, string? Email = null, string? Gst = null, string? RegistrationNumber = null, string? WhatsAppNumber = null, string? ReportHeader = null, string? ReportFooter = null, string? DigitalSignature = null, bool IsActive = true, int? OrganizationId = null);
-public record ClinicUpdateDto(string Code, string Name, int? LaboratoryGroupId = null, string? Logo = null, string? Address = null, string? Phone = null, string? Email = null, string? Gst = null, string? RegistrationNumber = null, string? WhatsAppNumber = null, string? ReportHeader = null, string? ReportFooter = null, string? DigitalSignature = null, bool IsActive = true, int? OrganizationId = null);
+public record LaboratoryDto(int Id, int OrganizationId, int? LaboratoryGroupId, string Code, string Name, string? Logo, string? Address, string? Phone, string? Email, string? Gst, string? RegistrationNumber, string? WhatsAppNumber, string? ReportHeader, string? ReportFooter, string? DigitalSignature, bool IsActive);
+public record LaboratoryCreateDto(string Code, string Name, int? LaboratoryGroupId = null, string? Logo = null, string? Address = null, string? Phone = null, string? Email = null, string? Gst = null, string? RegistrationNumber = null, string? WhatsAppNumber = null, string? ReportHeader = null, string? ReportFooter = null, string? DigitalSignature = null, bool IsActive = true, int? OrganizationId = null);
+public record LaboratoryUpdateDto(string Code, string Name, int? LaboratoryGroupId = null, string? Logo = null, string? Address = null, string? Phone = null, string? Email = null, string? Gst = null, string? RegistrationNumber = null, string? WhatsAppNumber = null, string? ReportHeader = null, string? ReportFooter = null, string? DigitalSignature = null, bool IsActive = true, int? OrganizationId = null);
 
-public record BranchDto(int Id, int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive);
-public record BranchCreateDto(int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
-public record BranchUpdateDto(int ClinicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
+public record ClinicDto(int Id, int OrganizationId, string Code, string Name, string? ShortName, string? Phone, string? Email, string? Address, string? Logo, string? LicenseNumber, bool IsActive);
+public record ClinicCreateDto(string Code, string Name, string? ShortName = null, string? Phone = null, string? Email = null, string? Address = null, string? Logo = null, string? LicenseNumber = null, bool IsActive = true);
+public record ClinicUpdateDto(string Code, string Name, string? ShortName = null, string? Phone = null, string? Email = null, string? Address = null, string? Logo = null, string? LicenseNumber = null, bool IsActive = true);
+
+public record BranchDto(int Id, int OrganizationId, int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive);
+public record BranchCreateDto(int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
+public record BranchUpdateDto(int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
 public record BranchDepartmentDto(int Id, int BranchId, int DepartmentId, string DepartmentName, string? DepartmentCode, bool IsActive);
 
 public record RoleDto(int Id, string Name);

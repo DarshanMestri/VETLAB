@@ -20,8 +20,7 @@ public class BranchDepartmentsController(VetLimsDbContext db, ICurrentUserServic
             return Forbid();
 
         var branch = await db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();
@@ -50,8 +49,7 @@ public class BranchDepartmentsController(VetLimsDbContext db, ICurrentUserServic
             return Forbid();
 
         var branch = await db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();
@@ -77,8 +75,8 @@ public class BranchDepartmentsController(VetLimsDbContext db, ICurrentUserServic
         if (!organizationId.HasValue)
             return Forbid();
 
-        var branch = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+        var branch = await db.Branches
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();
@@ -119,8 +117,8 @@ public class BranchDepartmentsController(VetLimsDbContext db, ICurrentUserServic
         if (!organizationId.HasValue)
             return Forbid();
 
-        var branch = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+        var branch = await db.Branches
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();
@@ -146,8 +144,8 @@ public class BranchDepartmentsController(VetLimsDbContext db, ICurrentUserServic
         if (!organizationId.HasValue)
             return Forbid();
 
-        var branch = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+        var branch = await db.Branches
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();

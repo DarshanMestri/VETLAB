@@ -94,8 +94,8 @@ public class RegistrationsController : ControllerBase
         if (!branchId.HasValue)
             return BadRequest("Branch selection is required.");
 
-        var branch = await _db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId.Value && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
+        var branch = await _db.Branches
+            .FirstOrDefaultAsync(x => x.Id == branchId.Value && x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
         if (branch is null)
             return BadRequest("Selected branch is not available for your organization.");
 
@@ -129,7 +129,7 @@ public class RegistrationsController : ControllerBase
 
         var reg = new Registration
         {
-           ClinicId = branch.ClinicId,
+           LaboratoryId = branch.LaboratoryId,
            BranchId = branch.Id,
            OwnerName = ownerName,
            OwnerNameAr = ownerNameAr,
@@ -212,7 +212,7 @@ public class RegistrationsController : ControllerBase
             var unitVat = price > 0 ? decimal.Round(price * vatRate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
             var item = new RegistrationItem
             {
-                ClinicId = branch.ClinicId,
+                LaboratoryId = branch.LaboratoryId,
                 BranchId = branch.Id,
                 ItemType = it.ItemType,
                 ItemId = it.ItemId,
@@ -298,8 +298,8 @@ public class RegistrationsController : ControllerBase
         var branchId = dto.BranchId ?? _currentUserService.BranchId;
         if (!branchId.HasValue) return BadRequest("Branch selection is required.");
 
-        var branch = await _db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId.Value && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
+        var branch = await _db.Branches
+            .FirstOrDefaultAsync(x => x.Id == branchId.Value && x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
         if (branch is null) return BadRequest("Selected branch is not available for your organization.");
 
         if (dto.Animals.Count == 0)
@@ -331,7 +331,7 @@ public class RegistrationsController : ControllerBase
         var ownerNameAr = owner?.NameAr ?? dto.OwnerNameAr?.Trim();
 
         // Update registration header
-        reg.ClinicId = branch.ClinicId;
+        reg.LaboratoryId = branch.LaboratoryId;
         reg.BranchId = branch.Id;
         reg.OwnerName = ownerName;
         reg.OwnerNameAr = ownerNameAr;
@@ -414,7 +414,7 @@ public class RegistrationsController : ControllerBase
             var unitVat = price > 0 ? decimal.Round(price * vatRate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
             var item = new RegistrationItem
             {
-                ClinicId = branch.ClinicId,
+                LaboratoryId = branch.LaboratoryId,
                 BranchId = branch.Id,
                 ItemType = it.ItemType,
                 ItemId = it.ItemId,

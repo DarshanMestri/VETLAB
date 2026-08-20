@@ -68,7 +68,7 @@ interface MasterTab {
 export class LaboratoryMasterComponent {
   readonly tabs: MasterTab[] = [
     { key: 'laboratories', label: 'Laboratories', hint: 'Laboratories (clinics) managed by this organization' },
-    { key: 'locations', label: 'Locations', hint: 'Branch locations under each laboratory' },
+    { key: 'locations', label: 'Branches', hint: 'Branch locations under each laboratory' },
     { key: 'departments', label: 'Departments', hint: 'Department master used across laboratories' },
     { key: 'laboratory-groups', label: 'Laboratory Groups', hint: 'Groups that cluster laboratories' },
     { key: 'units', label: 'Units', hint: 'Units used by test results' },

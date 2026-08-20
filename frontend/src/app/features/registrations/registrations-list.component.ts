@@ -163,17 +163,25 @@ export class RegistrationsListComponent {
     if (this.page * this.pageSize < this.total) { this.page++; this.loadData(); }
   }
 
+  private extractError(err: any, fallback: string): string {
+    if (typeof err?.error === 'string') return err.error;
+    return err?.error?.title
+      || (err?.error?.errors ? Object.values(err.error.errors).flat().join(' ') : null)
+      || err?.error?.message
+      || fallback;
+  }
+
   sendInvoice(registrationId: number) {
     this.http.post<{ message: string }>(`/api/whatsapp/send/invoice/${registrationId}`, {}).subscribe({
       next: () => alert('Invoice queued for WhatsApp delivery.'),
-      error: (err) => alert(err?.error ?? 'Unable to queue invoice.')
+      error: (err) => alert(this.extractError(err, 'Unable to queue invoice.'))
     });
   }
 
   sendReceipt(registrationId: number) {
     this.http.post<{ message: string }>(`/api/whatsapp/send/receipt/${registrationId}`, {}).subscribe({
       next: () => alert('Receipt queued for WhatsApp delivery.'),
-      error: (err) => alert(err?.error ?? 'Unable to queue receipt.')
+      error: (err) => alert(this.extractError(err, 'Unable to queue receipt.'))
     });
   }
 

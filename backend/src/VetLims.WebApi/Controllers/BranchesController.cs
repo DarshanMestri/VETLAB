@@ -13,19 +13,15 @@ namespace VetLims.WebApi.Controllers;
 public class BranchesController(VetLimsDbContext db, ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BranchDto>>> List([FromQuery] int? clinicId, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<IEnumerable<BranchDto>>> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var organizationId = await ResolveCurrentOrganizationIdAsync();
         if (!organizationId.HasValue)
             return Forbid();
 
         var q = db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .Where(x => x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted)
+            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted)
             .AsQueryable();
-
-        if (clinicId.HasValue)
-            q = q.Where(x => x.ClinicId == clinicId.Value && x.Clinic.OrganizationId == organizationId.Value);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -37,7 +33,7 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         var items = await q.OrderBy(x => x.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new BranchDto(x.Id, x.ClinicId, x.Code, x.Name, x.Address, x.Phone, x.Email, x.IsActive))
+            .Select(x => new BranchDto(x.Id, x.OrganizationId!.Value, x.ClinicId, x.LaboratoryId, x.Code, x.Name, x.Address, x.Phone, x.Email, x.IsActive))
             .ToListAsync();
 
         return Ok(new { total, page, pageSize, items });
@@ -51,11 +47,10 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
             return Forbid();
 
         var item = await db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
-        return Ok(new BranchDto(item.Id, item.ClinicId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
+        return Ok(new BranchDto(item.Id, item.OrganizationId!.Value, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
     }
 
     [HttpPost]
@@ -75,12 +70,18 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         if (!clinic.IsActive)
             return BadRequest("Clinic is inactive and cannot host a branch.");
 
-        if (await db.Branches.AnyAsync(x => x.ClinicId == dto.ClinicId && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
-            return Conflict("Branch code already exists in this clinic.");
+        var laboratory = await db.Laboratories.FirstOrDefaultAsync(x => x.Id == dto.LaboratoryId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
+        if (laboratory is null)
+            return NotFound("Laboratory not found or not in your organization.");
+
+        if (await db.Branches.AnyAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
+            return Conflict("Branch code already exists in this organization.");
 
         var item = new Branch
         {
+            OrganizationId = organizationId.Value,
             ClinicId = dto.ClinicId,
+            LaboratoryId = dto.LaboratoryId,
             Code = dto.Code.Trim(),
             Name = dto.Name.Trim(),
             Address = dto.Address?.Trim(),
@@ -92,7 +93,7 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         db.Branches.Add(item);
         await db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(Get), new { id = item.Id }, new BranchDto(item.Id, item.ClinicId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
+        return CreatedAtAction(nameof(Get), new { id = item.Id }, new BranchDto(item.Id, item.OrganizationId!.Value, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
     }
 
     [HttpPut("{id:int}")]
@@ -102,8 +103,8 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         if (!organizationId.HasValue)
             return Forbid();
 
-        var item = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+        var item = await db.Branches
+            .FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
         if (string.IsNullOrWhiteSpace(dto.Name)) return BadRequest("Branch name is required.");
@@ -116,10 +117,15 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         if (!targetClinic.IsActive)
             return BadRequest("Clinic is inactive and cannot host a branch.");
 
-        if (await db.Branches.AnyAsync(x => x.Id != id && x.ClinicId == dto.ClinicId && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
-            return Conflict("Branch code already exists in this clinic.");
+        var targetLaboratory = await db.Laboratories.FirstOrDefaultAsync(x => x.Id == dto.LaboratoryId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
+        if (targetLaboratory is null)
+            return NotFound("Laboratory not found or not in your organization.");
+
+        if (await db.Branches.AnyAsync(x => x.Id != id && x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
+            return Conflict("Branch code already exists in this organization.");
 
         item.ClinicId = dto.ClinicId;
+        item.LaboratoryId = dto.LaboratoryId;
         item.Code = dto.Code.Trim();
         item.Name = dto.Name.Trim();
         item.Address = dto.Address?.Trim();
@@ -128,7 +134,7 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         item.IsActive = dto.IsActive;
 
         await db.SaveChangesAsync();
-        return Ok(new BranchDto(item.Id, item.ClinicId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
+        return Ok(new BranchDto(item.Id, item.OrganizationId!.Value, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
     }
 
     [HttpPatch("{id:int}/status")]
@@ -138,8 +144,8 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         if (!organizationId.HasValue)
             return Forbid();
 
-        var item = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+        var item = await db.Branches
+            .FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
         item.IsActive = isActive;

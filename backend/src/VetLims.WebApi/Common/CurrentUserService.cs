@@ -29,12 +29,30 @@ public class CurrentUserService(IHttpContextAccessor httpContextAccessor) : ICur
         }
     }
 
-    public int? ClinicId
+    public int? LaboratoryId
     {
         get
         {
-            var v = _user?.FindFirstValue("clinic_id");
+            var v = _user?.FindFirstValue("laboratory_id");
             return int.TryParse(v, out var id) ? id : null;
+        }
+    }
+
+    public bool HasClinicAccess
+    {
+        get
+        {
+            var v = _user?.FindFirstValue("clinic_access");
+            return v == "true";
+        }
+    }
+
+    public bool HasLaboratoryAccess
+    {
+        get
+        {
+            var v = _user?.FindFirstValue("laboratory_access");
+            return v == "true";
         }
     }
 

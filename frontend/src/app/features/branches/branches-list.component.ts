@@ -1,7 +1,7 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BranchesService, BranchListItem, ClinicOption } from './branches.service';
+import { BranchesService, BranchListItem, ClinicOption, LaboratoryOption } from './branches.service';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -14,10 +14,10 @@ type StatusFilter = 'all' | 'active' | 'inactive';
     <div class="container py-3">
       <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
         <div>
-          <h2 class="mb-0">Locations</h2>
-          <small class="text-muted">Manage clinic branch locations for your organization</small>
+          <h2 class="mb-0">Branches</h2>
+          <small class="text-muted">Manage branch locations for your organization</small>
         </div>
-        <button class="btn btn-primary" (click)="openCreate()">+ Add Location</button>
+        <button class="btn btn-primary" (click)="openCreate()">+ Add Branch</button>
       </div>
 
       <div class="row g-3 align-items-center mb-3">
@@ -27,18 +27,12 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               class="form-control"
               [(ngModel)]="search"
               (keyup.enter)="load()"
-              placeholder="Search by code or name"
+              placeholder="Search by code, name, clinic, or laboratory"
             />
             <button class="btn btn-outline-secondary" (click)="load()">Search</button>
           </div>
         </div>
-        <div class="col-md-3">
-          <select class="form-select" [(ngModel)]="clinicFilter" (ngModelChange)="page.set(1); load()">
-            <option [ngValue]="null">All clinics</option>
-            <option *ngFor="let clinic of clinics" [ngValue]="clinic.id">{{ clinic.name }}</option>
-          </select>
-        </div>
-        <div class="col-md-3 text-md-end">
+        <div class="col-md-6 text-md-end">
           <div class="btn-group" role="group" aria-label="Filter by status">
             <button
               class="btn btn-sm"
@@ -81,6 +75,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <th>Code</th>
               <th>Name</th>
               <th>Clinic</th>
+              <th>Laboratory</th>
               <th>Address</th>
               <th>Phone</th>
               <th>Email</th>
@@ -92,7 +87,8 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             <tr *ngFor="let row of filteredRows()">
               <td>{{ row.code }}</td>
               <td>{{ row.name }}</td>
-              <td>{{ getClinicName(row.clinicId) }}</td>
+              <td>{{ row.clinicName || getClinicName(row.clinicId) }}</td>
+              <td>{{ row.laboratoryName || getLaboratoryName(row.laboratoryId) }}</td>
               <td>{{ row.address || '—' }}</td>
               <td>{{ row.phone || '—' }}</td>
               <td>{{ row.email || '—' }}</td>
@@ -116,7 +112,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
         </table>
 
         <ng-template #empty>
-          <p class="text-muted py-3">No locations found.</p>
+          <p class="text-muted py-3">No branches found.</p>
         </ng-template>
       </div>
 
@@ -215,17 +211,33 @@ type StatusFilter = 'all' | 'active' | 'inactive';
       </section>
 
       <section class="card mt-4" *ngIf="showForm()">
-        <div class="card-header">{{ editingId() ? 'Edit' : 'Create' }} Location</div>
+        <div class="card-header">{{ editingId() ? 'Edit' : 'Create' }} Branch</div>
         <div class="card-body">
           <form #branchForm="ngForm" (ngSubmit)="save(branchForm.valid ?? false)" novalidate>
             <div class="row g-3">
               <div class="col-md-6">
-                <label class="form-label">Clinic *</label>
-                <select class="form-select" name="clinicId" [(ngModel)]="form.clinicId" required #clinicId="ngModel">
-                  <option [ngValue]="null" disabled>Select clinic</option>
-                  <option *ngFor="let clinic of clinics" [ngValue]="clinic.id">{{ clinic.name }} ({{ clinic.code }})</option>
+                <label class="form-label">Clinic <span class="text-danger">*</span></label>
+                <select class="form-select" [(ngModel)]="form.clinicId" name="clinicId" required>
+                  <option [ngValue]="null">Select Clinic</option>
+                  @for(c of clinicOptions; track c.id) {
+                    <option [ngValue]="c.id">{{c.name}} ({{c.code}})</option>
+                  }
                 </select>
-                <div class="invalid-feedback d-block" *ngIf="clinicId.invalid && clinicId.touched">Clinic is required.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Laboratory <span class="text-danger">*</span></label>
+                <select class="form-select" [(ngModel)]="form.laboratoryId" name="laboratoryId" required>
+                  <option [ngValue]="null">Select Laboratory</option>
+                  @for(l of laboratoryOptions; track l.id) {
+                    <option [ngValue]="l.id">{{l.name}} ({{l.code}})</option>
+                  }
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Name *</label>
+                <input class="form-control" name="name" [(ngModel)]="form.name" maxlength="200" required #name="ngModel" />
+                <div class="invalid-feedback d-block" *ngIf="name.invalid && name.touched">Name is required.</div>
               </div>
 
               <div class="col-md-3">
@@ -240,12 +252,6 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                   <input id="branchIsActive" class="form-check-input" type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
                   <label class="form-check-label" for="branchIsActive">Active</label>
                 </div>
-              </div>
-
-              <div class="col-md-12">
-                <label class="form-label">Name *</label>
-                <input class="form-control" name="name" [(ngModel)]="form.name" maxlength="200" required #name="ngModel" />
-                <div class="invalid-feedback d-block" *ngIf="name.invalid && name.touched">Name is required.</div>
               </div>
 
               <div class="col-md-6">
@@ -295,8 +301,9 @@ export class BranchesListComponent implements OnInit {
   readonly availableTests = signal<any[]>([]);
 
   search = '';
-  clinicFilter: number | null = null;
   clinics: ClinicOption[] = [];
+  clinicOptions: ClinicOption[] = [];
+  laboratoryOptions: LaboratoryOption[] = [];
   form = this.emptyForm();
   selectedDepartmentId: number | null = null;
   selectedTestId: number | null = null;
@@ -304,6 +311,7 @@ export class BranchesListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadClinics();
+    this.loadLaboratories();
     this.load();
   }
 
@@ -321,8 +329,14 @@ export class BranchesListComponent implements OnInit {
     };
   }
 
-  getClinicName(clinicId: number): string {
+  getClinicName(clinicId: number | null | undefined): string {
+    if (!clinicId) return '—';
     return this.clinics.find((clinic) => clinic.id === clinicId)?.name ?? `Clinic #${clinicId}`;
+  }
+
+  getLaboratoryName(laboratoryId: number | null | undefined): string {
+    if (!laboratoryId) return '—';
+    return this.laboratoryOptions.find((lab) => lab.id === laboratoryId)?.name ?? `Laboratory #${laboratoryId}`;
   }
 
   openCreate(): void {
@@ -336,7 +350,8 @@ export class BranchesListComponent implements OnInit {
     this.editingId.set(row.id);
     this.form = {
       ...this.emptyForm(),
-      clinicId: row.clinicId,
+      clinicId: row.clinicId ?? null,
+      laboratoryId: row.laboratoryId ?? null,
       code: row.code,
       name: row.name,
       address: row.address ?? '',
@@ -359,8 +374,14 @@ export class BranchesListComponent implements OnInit {
       return;
     }
 
+    if (!this.form.laboratoryId) {
+      this.error.set('Select a laboratory.');
+      return;
+    }
+
     const payload = {
       clinicId: this.form.clinicId,
+      laboratoryId: this.form.laboratoryId,
       code: (this.form.code || '').trim(),
       name: (this.form.name || '').trim(),
       address: (this.form.address || '').trim() || null,
@@ -535,10 +556,10 @@ export class BranchesListComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
     this.svc
-      .list(this.search, this.clinicFilter, this.page(), this.pageSize)
+      .list(this.search, undefined, this.page(), this.pageSize)
       .subscribe({
         next: (res) => {
-          this.rows.set((res.items ?? []).map((row: BranchListItem) => ({ ...row, clinicName: this.getClinicName(row.clinicId) })));
+          this.rows.set((res.items ?? []).map((row: BranchListItem) => ({ ...row, clinicName: this.getClinicName(row.clinicId ?? null) })));
           this.total.set(res.total ?? 0);
           this.loading.set(false);
         },
@@ -555,9 +576,22 @@ export class BranchesListComponent implements OnInit {
     this.svc.getClinics().subscribe({
       next: (items) => {
         this.clinics = items ?? [];
+        this.clinicOptions = items ?? [];
       },
       error: () => {
         this.clinics = [];
+        this.clinicOptions = [];
+      },
+    });
+  }
+
+  loadLaboratories(): void {
+    this.svc.getLaboratories().subscribe({
+      next: (items) => {
+        this.laboratoryOptions = items ?? [];
+      },
+      error: () => {
+        this.laboratoryOptions = [];
       },
     });
   }
@@ -573,6 +607,7 @@ export class BranchesListComponent implements OnInit {
   emptyForm() {
     return {
       clinicId: null as number | null,
+      laboratoryId: null as number | null,
       code: '',
       name: '',
       address: '',

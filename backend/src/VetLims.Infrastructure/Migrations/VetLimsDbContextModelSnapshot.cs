@@ -785,6 +785,9 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("LaboratoryId")
+                        .HasColumnType("integer");
+
                     b.Property<decimal?>("Latitude")
                         .HasColumnType("numeric");
 
@@ -809,6 +812,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
@@ -826,7 +832,11 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClinicId", "Code")
+                    b.HasIndex("ClinicId");
+
+                    b.HasIndex("LaboratoryId");
+
+                    b.HasIndex("OrganizationId", "Code")
                         .IsUnique();
 
                     b.ToTable("branches", (string)null);
@@ -1157,9 +1167,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int>("ClientId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ClinicId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1190,6 +1197,9 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int>("ItemType")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("LaboratoryId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text");
 
@@ -1209,7 +1219,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("ClinicId");
+                    b.HasIndex("LaboratoryId");
 
                     b.HasIndex("ClientId", "ItemType", "ItemId")
                         .IsUnique();
@@ -1226,7 +1236,8 @@ namespace VetLims.Infrastructure.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Address")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -1242,10 +1253,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Currency")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
                     b.Property<string>("DeletedBy")
                         .HasColumnType("text");
 
@@ -1253,18 +1260,12 @@ namespace VetLims.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("DigitalSignature")
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
-
-                    b.Property<string>("EmailSettingsJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Gst")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -1272,19 +1273,13 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<int?>("LaboratoryGroupId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Language")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
                     b.Property<string>("LicenseNumber")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
                     b.Property<string>("Logo")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text");
@@ -1304,10 +1299,6 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
-                    b.Property<string>("RegistrationNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<string>("ReportFooter")
                         .HasColumnType("text");
 
@@ -1318,24 +1309,10 @@ namespace VetLims.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<string>("Timezone")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Website")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("WhatsAppNumber")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("LaboratoryGroupId");
 
                     b.HasIndex("Name");
 
@@ -2145,6 +2122,134 @@ namespace VetLims.Infrastructure.Migrations
                     b.ToTable("inventory_purchase_return_lines", (string)null);
                 });
 
+            modelBuilder.Entity("VetLims.Infrastructure.Entities.Laboratory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DigitalSignature")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EmailSettingsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Gst")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("LaboratoryGroupId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Language")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("LicenseNumber")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Logo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ReportFooter")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReportHeader")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ShortName")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Timezone")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("WhatsAppNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LaboratoryGroupId");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("OrganizationId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("laboratories", (string)null);
+                });
+
             modelBuilder.Entity("VetLims.Infrastructure.Entities.LaboratoryGroup", b =>
                 {
                     b.Property<int>("Id")
@@ -2843,9 +2948,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int?>("BranchId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ClinicId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2868,6 +2970,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("LaboratoryId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Method")
                         .HasColumnType("integer");
@@ -2894,7 +2999,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("ClinicId");
+                    b.HasIndex("LaboratoryId");
 
                     b.HasIndex("RegistrationId");
 
@@ -3194,9 +3299,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int?>("ClientId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ClinicId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ClinicalNotes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -3230,6 +3332,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("LaboratoryId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text");
@@ -3277,9 +3382,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasIndex("ClientId");
 
-                    b.HasIndex("ClinicId");
-
                     b.HasIndex("DoctorId");
+
+                    b.HasIndex("LaboratoryId");
 
                     b.HasIndex("OwnerId");
 
@@ -3367,9 +3472,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int?>("BranchId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ClinicId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3397,6 +3499,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("ItemType")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("LaboratoryId")
                         .HasColumnType("integer");
 
                     b.Property<string>("ModifiedBy")
@@ -3463,10 +3568,10 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("ClinicId");
-
                     b.HasIndex("ItemBarcode")
                         .IsUnique();
+
+                    b.HasIndex("LaboratoryId");
 
                     b.HasIndex("RegistrationId");
 
@@ -3486,9 +3591,6 @@ namespace VetLims.Infrastructure.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int?>("BranchId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ClinicId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("CompletedAt")
@@ -3515,6 +3617,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("LaboratoryId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text");
@@ -3565,7 +3670,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("ClinicId");
+                    b.HasIndex("LaboratoryId");
 
                     b.HasIndex("RegistrationAnimalId");
 
@@ -3583,9 +3688,6 @@ namespace VetLims.Infrastructure.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int?>("BranchId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ClinicId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
@@ -3629,6 +3731,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Property<bool?>("IsOutOfRange")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("LaboratoryId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text");
@@ -3678,7 +3783,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("ClinicId");
+                    b.HasIndex("LaboratoryId");
 
                     b.HasIndex("TestParameterId");
 
@@ -4356,6 +4461,16 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("HasClinicAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("HasLaboratoryAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("IsDefault")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -4754,9 +4869,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int?>("BranchId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ClinicId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
@@ -4814,8 +4926,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
-
-                    b.HasIndex("ClinicId");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -5011,10 +5121,26 @@ namespace VetLims.Infrastructure.Migrations
                     b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
                         .WithMany()
                         .HasForeignKey("ClinicId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Clinic");
+
+                    b.Navigation("Laboratory");
+
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.BranchDepartment", b =>
@@ -5078,31 +5204,24 @@ namespace VetLims.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
                         .WithMany()
-                        .HasForeignKey("ClinicId");
+                        .HasForeignKey("LaboratoryId");
 
                     b.Navigation("Branch");
 
                     b.Navigation("Client");
 
-                    b.Navigation("Clinic");
+                    b.Navigation("Laboratory");
                 });
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.Clinic", b =>
                 {
-                    b.HasOne("VetLims.Infrastructure.Entities.LaboratoryGroup", "LaboratoryGroup")
-                        .WithMany("Clinics")
-                        .HasForeignKey("LaboratoryGroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("LaboratoryGroup");
 
                     b.Navigation("Organization");
                 });
@@ -5213,6 +5332,24 @@ namespace VetLims.Infrastructure.Migrations
                     b.Navigation("InventoryPurchaseReturn");
                 });
 
+            modelBuilder.Entity("VetLims.Infrastructure.Entities.Laboratory", b =>
+                {
+                    b.HasOne("VetLims.Infrastructure.Entities.LaboratoryGroup", "LaboratoryGroup")
+                        .WithMany("Laboratories")
+                        .HasForeignKey("LaboratoryGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("LaboratoryGroup");
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("VetLims.Infrastructure.Entities.LaboratoryGroup", b =>
                 {
                     b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
@@ -5264,9 +5401,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
                         .WithMany()
-                        .HasForeignKey("ClinicId")
+                        .HasForeignKey("LaboratoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("VetLims.Infrastructure.Entities.Registration", "Registration")
@@ -5277,7 +5414,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Navigation("Branch");
 
-                    b.Navigation("Clinic");
+                    b.Navigation("Laboratory");
 
                     b.Navigation("Registration");
                 });
@@ -5342,14 +5479,14 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
-                        .WithMany()
-                        .HasForeignKey("ClinicId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("VetLims.Infrastructure.Entities.Doctor", "Doctor")
                         .WithMany()
                         .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("VetLims.Infrastructure.Entities.Owner", "Owner")
@@ -5361,9 +5498,9 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Navigation("Client");
 
-                    b.Navigation("Clinic");
-
                     b.Navigation("Doctor");
+
+                    b.Navigation("Laboratory");
 
                     b.Navigation("Owner");
                 });
@@ -5401,9 +5538,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
                         .WithMany()
-                        .HasForeignKey("ClinicId")
+                        .HasForeignKey("LaboratoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("VetLims.Infrastructure.Entities.Registration", "Registration")
@@ -5424,7 +5561,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Navigation("Branch");
 
-                    b.Navigation("Clinic");
+                    b.Navigation("Laboratory");
 
                     b.Navigation("Registration");
 
@@ -5440,9 +5577,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
                         .WithMany()
-                        .HasForeignKey("ClinicId")
+                        .HasForeignKey("LaboratoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("VetLims.Infrastructure.Entities.RegistrationAnimal", "RegistrationAnimal")
@@ -5458,7 +5595,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Navigation("Branch");
 
-                    b.Navigation("Clinic");
+                    b.Navigation("Laboratory");
 
                     b.Navigation("RegistrationAnimal");
 
@@ -5472,9 +5609,9 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
+                    b.HasOne("VetLims.Infrastructure.Entities.Laboratory", "Laboratory")
                         .WithMany()
-                        .HasForeignKey("ClinicId")
+                        .HasForeignKey("LaboratoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("VetLims.Infrastructure.Entities.Result", "Result")
@@ -5491,7 +5628,7 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.Navigation("Branch");
 
-                    b.Navigation("Clinic");
+                    b.Navigation("Laboratory");
 
                     b.Navigation("Result");
 
@@ -5694,19 +5831,12 @@ namespace VetLims.Infrastructure.Migrations
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("VetLims.Infrastructure.Entities.Clinic", "Clinic")
-                        .WithMany()
-                        .HasForeignKey("ClinicId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Branch");
-
-                    b.Navigation("Clinic");
 
                     b.Navigation("Organization");
                 });
@@ -5758,7 +5888,7 @@ namespace VetLims.Infrastructure.Migrations
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.LaboratoryGroup", b =>
                 {
-                    b.Navigation("Clinics");
+                    b.Navigation("Laboratories");
                 });
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.Owner", b =>

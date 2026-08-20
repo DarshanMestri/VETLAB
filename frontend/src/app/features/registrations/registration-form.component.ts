@@ -1339,6 +1339,14 @@ export class RegistrationFormComponent implements AfterViewInit {
 
   // --- Form ---
 
+  private extractError(err: any, fallback: string): string {
+    if (typeof err?.error === 'string') return err.error;
+    return err?.error?.title
+      || (err?.error?.errors ? Object.values(err.error.errors).flat().join(' ') : null)
+      || err?.error?.message
+      || fallback;
+  }
+
   private createEmptyModel(): CreateDto {
     return {
       ownerName: '',
@@ -1467,7 +1475,7 @@ export class RegistrationFormComponent implements AfterViewInit {
       error: (err) => {
         this.ngZone.run(() => {
           this.saving = false;
-          this.errorMessage = err?.error ?? 'Failed to save registration.';
+          this.errorMessage = this.extractError(err, 'Failed to save registration.');
           this.cdr.detectChanges();
         });
       },
@@ -1568,7 +1576,7 @@ export class RegistrationFormComponent implements AfterViewInit {
           if (regId) this.loadBarcodesAndShowPopup(regId);
         });
       },
-      error: (err) => alert(err?.error ?? 'Failed to collect sample.'),
+      error: (err) => alert(this.extractError(err, 'Failed to collect sample.')),
     });
   }
 
@@ -1579,7 +1587,7 @@ export class RegistrationFormComponent implements AfterViewInit {
           this.openSampleCollectionPopup();
         });
       },
-      error: (err) => alert(err?.error ?? 'Failed to receive sample.'),
+      error: (err) => alert(this.extractError(err, 'Failed to receive sample.')),
     });
   }
 

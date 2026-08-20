@@ -14,9 +14,10 @@ export interface LaboratoryGroupListItem {
   modifiedDate?: string | null;
   isDeleted: boolean;
   clinicCount: number;
+  laboratoryCount: number;
 }
 
-export interface LaboratoryGroupClinicItem {
+export interface LaboratoryGroupLaboratoryItem {
   id: number;
   organizationId: number;
   code: string;
@@ -35,7 +36,7 @@ export interface LaboratoryGroupCreateRequest {
 
 export interface LaboratoryGroupUpdateRequest extends LaboratoryGroupCreateRequest {}
 
-export interface ClinicListItem {
+export interface LaboratoryListItem {
   id: number;
   organizationId: number;
   code: string;
@@ -77,19 +78,19 @@ export class LaboratoryGroupsService {
     return this.http.patch<void>(`${this.base}/${id}/status`, isActive);
   }
 
-  getClinics(laboratoryGroupId: number): Observable<LaboratoryGroupClinicItem[]> {
-    return this.http.get<LaboratoryGroupClinicItem[]>(`${this.base}/${laboratoryGroupId}/clinics`);
+  getLaboratories(laboratoryGroupId: number): Observable<LaboratoryGroupLaboratoryItem[]> {
+    return this.http.get<LaboratoryGroupLaboratoryItem[]>(`${this.base}/${laboratoryGroupId}/laboratories`);
   }
 
-  getAvailableClinics(): Observable<ClinicListItem[]> {
-    return this.http.get<ClinicListItem[]>('/api/clinics');
+  getAvailableLaboratories(): Observable<LaboratoryListItem[]> {
+    return this.http.get<LaboratoryListItem[]>('/api/laboratories');
   }
 
-  assignClinic(laboratoryGroupId: number, clinicId: number): Observable<LaboratoryGroupClinicItem> {
-    return this.http.put<LaboratoryGroupClinicItem>(`${this.base}/${laboratoryGroupId}/clinics/${clinicId}`, {});
+  assignLaboratory(laboratoryGroupId: number, laboratoryId: number): Observable<LaboratoryGroupLaboratoryItem> {
+    return this.http.put<LaboratoryGroupLaboratoryItem>(`${this.base}/${laboratoryGroupId}/laboratories/${laboratoryId}`, {});
   }
 
-  unassignClinic(laboratoryGroupId: number, clinicId: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/${laboratoryGroupId}/clinics/${clinicId}`);
+  unassignLaboratory(laboratoryGroupId: number, laboratoryId: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${laboratoryGroupId}/laboratories/${laboratoryId}`);
   }
 }

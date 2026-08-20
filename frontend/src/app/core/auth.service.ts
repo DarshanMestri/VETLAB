@@ -4,26 +4,29 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subscription, timer } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { jwtDecode } from 'jwt-decode'; // ✅ v4 named import
+import { jwtDecode } from 'jwt-decode';
 
 const API_URL = '/api/auth';
 type Decoded = Record<string, any>;
+
 interface LoginResponse {
   token: string;
-  username?: string;
-  clinicId?: number;
+  organizationId?: number;
   branchId?: number | null;
 }
-export interface LabBranchOption {
-  branchId: number;
-  branchCode: string;
-  branchName: string;
+
+export interface OrganizationOption {
+  id: number;
+  code: string;
+  name: string;
 }
-export interface LabClinicOption {
-  clinicId: number;
-  clinicCode: string;
-  clinicName: string;
-  branches: LabBranchOption[];
+
+export interface AuthBranchOption {
+  id: number;
+  code: string;
+  name: string;
+  laboratoryId: number;
+  laboratoryName: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -31,48 +34,52 @@ export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
   private tokenKey = 'token';
-  private clinicKey = 'selectedClinicId';
+  private orgKey = 'selectedOrganizationId';
   private branchKey = 'selectedBranchId';
 
   private _token$ = new BehaviorSubject<string | null>(null);
   private _roles$ = new BehaviorSubject<string[]>([]);
   private _username$ = new BehaviorSubject<string | null>(null);
-  private _selectedClinicId$ = new BehaviorSubject<number | null>(null);
+  private _selectedOrganizationId$ = new BehaviorSubject<number | null>(null);
   private _selectedBranchId$ = new BehaviorSubject<number | null>(null);
   private expiryTimer?: Subscription;
 
   token$ = this._token$.asObservable();
   roles$ = this._roles$.asObservable();
   username$ = this._username$.asObservable();
-  selectedClinicId$ = this._selectedClinicId$.asObservable();
+  selectedOrganizationId$ = this._selectedOrganizationId$.asObservable();
   selectedBranchId$ = this._selectedBranchId$.asObservable();
 
   constructor() {
     const t = this.safeGet(this.tokenKey);
     if (t) this.setSession(t);
-    this._selectedClinicId$.next(this.parseStoredNumber(this.safeGet(this.clinicKey)));
+    this._selectedOrganizationId$.next(this.parseStoredNumber(this.safeGet(this.orgKey)));
     this._selectedBranchId$.next(this.parseStoredNumber(this.safeGet(this.branchKey)));
   }
 
   login(
     usernameOrEmail: string,
     password: string,
-    clinicId: number,
+    organizationId: number,
     branchId: number | null
   ): Observable<LoginResponse> {
     return this.http
-      .post<LoginResponse>(`${API_URL}/login`, { usernameOrEmail, password, clinicId, branchId })
+      .post<LoginResponse>(`${API_URL}/login`, { usernameOrEmail, password, organizationId, branchId })
       .pipe(
         tap((res) => {
           this.setSession(res.token);
-          this.setLabLocation(res.clinicId ?? clinicId, res.branchId ?? branchId);
+          this.setSessionLocation(res.organizationId ?? organizationId, res.branchId ?? branchId);
           this.router.navigate(['/dashboard']);
         })
       );
   }
 
-  getLabLocations(): Observable<LabClinicOption[]> {
-    return this.http.get<LabClinicOption[]>(`${API_URL}/lab-locations`);
+  getOrganizations(): Observable<OrganizationOption[]> {
+    return this.http.get<OrganizationOption[]>(`${API_URL}/organizations`);
+  }
+
+  getBranches(organizationId: number): Observable<AuthBranchOption[]> {
+    return this.http.get<AuthBranchOption[]>(`${API_URL}/branches`, { params: { organizationId: String(organizationId) } });
   }
 
   logout() {
@@ -84,9 +91,9 @@ export class AuthService {
     const token = this._token$.value ?? this.safeGet(this.tokenKey);
     if (!token) return false;
     const d = this.decode(token);
-    const exp = d?.exp as number | undefined; // unix seconds
+    const exp = d?.exp as number | undefined;
     if (!exp) return true;
-    return exp * 1000 > Date.now() + 30_000; // 30s skew
+    return exp * 1000 > Date.now() + 30_000;
   }
 
   getToken(): string | null {
@@ -103,17 +110,34 @@ export class AuthService {
   getUsername(): string | null {
     return this._username$.value;
   }
-  getSelectedClinicId(): number | null {
-    return this._selectedClinicId$.value;
+  getSelectedOrganizationId(): number | null {
+    return this._selectedOrganizationId$.value;
   }
   getSelectedBranchId(): number | null {
     return this._selectedBranchId$.value;
   }
-  setLabLocation(clinicId: number | null, branchId: number | null) {
-    this._selectedClinicId$.next(clinicId);
+
+  getJwtPayload(): Decoded | null {
+    const token = this.getToken();
+    if (!token) return null;
+    return this.decode(token);
+  }
+
+  hasClinicAccess(): boolean {
+    const payload = this.getJwtPayload();
+    return payload?.clinic_access === 'true';
+  }
+
+  hasLaboratoryAccess(): boolean {
+    const payload = this.getJwtPayload();
+    return payload?.laboratory_access === 'true';
+  }
+
+  setSessionLocation(organizationId: number | null, branchId: number | null) {
+    this._selectedOrganizationId$.next(organizationId);
     this._selectedBranchId$.next(branchId);
-    if (clinicId == null) this.safeRemove(this.clinicKey);
-    else this.safeSet(this.clinicKey, String(clinicId));
+    if (organizationId == null) this.safeRemove(this.orgKey);
+    else this.safeSet(this.orgKey, String(organizationId));
     if (branchId == null) this.safeRemove(this.branchKey);
     else this.safeSet(this.branchKey, String(branchId));
   }

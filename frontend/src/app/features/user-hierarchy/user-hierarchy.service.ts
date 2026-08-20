@@ -8,7 +8,6 @@ export interface HierarchyUser {
   displayName: string;
   email: string;
   isActive: boolean;
-  clinicId: number | null;
   branchId: number | null;
   roles: string[];
   lastLoginAt: string | null;
@@ -22,18 +21,9 @@ export interface HierarchyBranch {
   users: HierarchyUser[];
 }
 
-export interface HierarchyLab {
-  id: number;
-  code: string;
-  name: string;
-  isActive: boolean;
-  users: HierarchyUser[];
-  branches: HierarchyBranch[];
-}
-
 export interface HierarchyResponse {
   organization: { id: number; code: string; name: string };
-  labs: HierarchyLab[];
+  branches: HierarchyBranch[];
   unassigned: HierarchyUser[];
 }
 

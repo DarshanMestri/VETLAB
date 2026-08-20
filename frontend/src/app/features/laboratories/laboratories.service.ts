@@ -48,7 +48,7 @@ export interface LaboratoryUpdateRequest extends LaboratoryCreateRequest {}
 
 @Injectable({ providedIn: 'root' })
 export class LaboratoriesService {
-  private readonly base = '/api/clinics';
+  private readonly base = '/api/laboratories';
 
   constructor(private readonly http: HttpClient) {}
 

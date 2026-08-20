@@ -21,9 +21,8 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
 
         var items = await db.BranchTests.AsNoTracking()
             .Include(x => x.Branch)
-            .ThenInclude(x => x.Clinic)
             .Include(x => x.Test)
-            .Where(x => x.Branch.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && !x.Test.IsDeleted)
+            .Where(x => x.Branch.OrganizationId == organizationId.Value && !x.IsDeleted && !x.Test.IsDeleted)
             .OrderBy(x => x.BranchId)
             .ThenBy(x => x.Test.Name)
             .Select(x => new BranchTestDto(
@@ -47,9 +46,8 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
 
         var mapping = await db.BranchTests.AsNoTracking()
             .Include(x => x.Branch)
-            .ThenInclude(x => x.Clinic)
             .Include(x => x.Test)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && !x.Test.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.OrganizationId == organizationId.Value && !x.IsDeleted && !x.Test.IsDeleted);
 
         if (mapping is null)
             return NotFound();
@@ -65,8 +63,7 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
             return Forbid();
 
         var branch = await db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();
@@ -95,8 +92,7 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
             return Forbid();
 
         var branch = await db.Branches.AsNoTracking()
-            .Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound();
@@ -122,8 +118,8 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
         if (!organizationId.HasValue)
             return Forbid();
 
-        var branch = await db.Branches.Include(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == branchId && x.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+        var branch = await db.Branches
+            .FirstOrDefaultAsync(x => x.Id == branchId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (branch is null)
             return NotFound("Branch not found.");
@@ -166,9 +162,8 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
 
         var mapping = await db.BranchTests
             .Include(x => x.Branch)
-            .ThenInclude(x => x.Clinic)
             .Include(x => x.Test)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted && !x.Test.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.OrganizationId == organizationId.Value && !x.IsDeleted && !x.Test.IsDeleted);
 
         if (mapping is null)
             return NotFound();
@@ -188,8 +183,7 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
 
         var mapping = await db.BranchTests
             .Include(x => x.Branch)
-            .ThenInclude(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (mapping is null)
             return NotFound();
@@ -211,8 +205,7 @@ public class BranchTestsController(VetLimsDbContext db, ICurrentUserService curr
 
         var mapping = await db.BranchTests
             .Include(x => x.Branch)
-            .ThenInclude(x => x.Clinic)
-            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.Clinic.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == id && x.Branch.OrganizationId == organizationId.Value && !x.IsDeleted);
 
         if (mapping is null)
             return NotFound();

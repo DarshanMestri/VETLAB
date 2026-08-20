@@ -10,13 +10,11 @@ public class AppUser : IdentityUser<int>
 
     // Membership context
     public int? OrganizationId { get; set; }
-    public int? ClinicId { get; set; }
     public int? BranchId { get; set; }
 
     public bool IsActive { get; set; } = true;
 
     public Organization? Organization { get; set; }
-    public Clinic? Clinic { get; set; }
     public Branch? Branch { get; set; }
 
     // Support multiple assigned branches/locations per user

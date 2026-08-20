@@ -9,8 +9,8 @@ public enum AgeUnit { Days = 1, Months = 2, Years = 3 }
 
 public class Registration : BaseEntity
 {
-    public int? ClinicId { get; set; }
-    public Clinic? Clinic { get; set; }
+    public int? LaboratoryId { get; set; }
+    public Laboratory? Laboratory { get; set; }
 
     public int? BranchId { get; set; }
     public Branch? Branch { get; set; }
@@ -74,8 +74,8 @@ public class RegistrationItem : BaseEntity
     public int RegistrationId { get; set; }
     public Registration Registration { get; set; } = default!;
 
-    public int? ClinicId { get; set; }
-    public Clinic? Clinic { get; set; }
+    public int? LaboratoryId { get; set; }
+    public Laboratory? Laboratory { get; set; }
 
     public int? BranchId { get; set; }
     public Branch? Branch { get; set; }
@@ -114,8 +114,8 @@ public class Payment : BaseEntity
     public int RegistrationId { get; set; }
     public Registration Registration { get; set; } = default!;
 
-    public int? ClinicId { get; set; }
-    public Clinic? Clinic { get; set; }
+    public int? LaboratoryId { get; set; }
+    public Laboratory? Laboratory { get; set; }
 
     public int? BranchId { get; set; }
     public Branch? Branch { get; set; }

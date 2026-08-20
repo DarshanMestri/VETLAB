@@ -38,7 +38,7 @@ public class UsersController : ControllerBase
         string DisplayName,
         string Password,
         string RoleName,
-        int ClinicId,
+        int OrganizationId,
         int? BranchId,
         bool IsActive = true);
     public record UpdateUserRequest(
@@ -46,7 +46,7 @@ public class UsersController : ControllerBase
         string Email,
         string DisplayName,
         string RoleName,
-        int ClinicId,
+        int OrganizationId,
         int? BranchId,
         bool IsActive,
         string? NewPassword = null);
@@ -80,7 +80,6 @@ public class UsersController : ControllerBase
                 user.Email,
                 user.DisplayName,
                 user.OrganizationId,
-                user.ClinicId,
                 user.BranchId,
                 user.IsActive,
                 Roles = await _users.GetRolesAsync(user)
@@ -102,22 +101,21 @@ public class UsersController : ControllerBase
         if (!await _roles.RoleExistsAsync(roleName))
             return BadRequest("Selected role does not exist.");
 
-        var selectedClinic = await _db.Clinics.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == req.ClinicId && x.IsActive);
-        if (selectedClinic is null || !selectedClinic.OrganizationId.HasValue)
-            return BadRequest("Selected laboratory is invalid or has no organization.");
+        var organization = await _db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == req.OrganizationId && x.IsActive);
+        if (organization is null)
+            return BadRequest("Selected organization is invalid or inactive.");
 
         if (req.BranchId.HasValue && !await _db.Branches.AsNoTracking()
-                .AnyAsync(x => x.Id == req.BranchId.Value && x.ClinicId == req.ClinicId && x.IsActive))
-            return BadRequest("Selected branch is invalid for the laboratory.");
+                .AnyAsync(x => x.Id == req.BranchId.Value && x.OrganizationId == req.OrganizationId && x.IsActive))
+            return BadRequest("Selected branch is invalid for the organization.");
 
         var user = new AppUser
         {
             UserName = req.UserName.Trim(),
             Email = req.Email.Trim(),
             DisplayName = req.DisplayName.Trim(),
-            OrganizationId = selectedClinic.OrganizationId,
-            ClinicId = req.ClinicId,
+            OrganizationId = req.OrganizationId,
             BranchId = req.BranchId,
             IsActive = req.IsActive,
             EmailConfirmed = true
@@ -137,7 +135,7 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(List), new { id = user.Id }, new
         {
             user.Id, user.UserName, user.Email, user.DisplayName,
-            user.OrganizationId, user.ClinicId, user.BranchId, user.IsActive,
+            user.OrganizationId, user.BranchId, user.IsActive,
             Roles = new[] { roleName }
         });
     }
@@ -156,14 +154,14 @@ public class UsersController : ControllerBase
         if (!await _roles.RoleExistsAsync(roleName))
             return BadRequest("Selected role does not exist.");
 
-        var selectedClinic = await _db.Clinics.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == req.ClinicId && x.IsActive);
-        if (selectedClinic is null || !selectedClinic.OrganizationId.HasValue)
-            return BadRequest("Selected laboratory is invalid or has no organization.");
+        var organization = await _db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == req.OrganizationId && x.IsActive);
+        if (organization is null)
+            return BadRequest("Selected organization is invalid or inactive.");
 
         if (req.BranchId.HasValue && !await _db.Branches.AsNoTracking()
-                .AnyAsync(x => x.Id == req.BranchId.Value && x.ClinicId == req.ClinicId && x.IsActive))
-            return BadRequest("Selected branch is invalid for the laboratory.");
+                .AnyAsync(x => x.Id == req.BranchId.Value && x.OrganizationId == req.OrganizationId && x.IsActive))
+            return BadRequest("Selected branch is invalid for the organization.");
 
         var newUserName = req.UserName.Trim();
         var newEmail = req.Email.Trim();
@@ -190,9 +188,8 @@ public class UsersController : ControllerBase
         user.UserName = newUserName;
         user.Email = newEmail;
         user.DisplayName = req.DisplayName.Trim();
-        user.ClinicId = req.ClinicId;
+        user.OrganizationId = req.OrganizationId;
         user.BranchId = req.BranchId;
-        user.OrganizationId = selectedClinic.OrganizationId;
         user.IsActive = req.IsActive;
 
         var result = await _users.UpdateAsync(user);
@@ -224,7 +221,7 @@ public class UsersController : ControllerBase
         return Ok(new
         {
             user.Id, user.UserName, user.Email, user.DisplayName,
-            user.OrganizationId, user.ClinicId, user.BranchId, user.IsActive,
+            user.OrganizationId, user.BranchId, user.IsActive,
             Roles = new[] { roleName }
         });
     }
@@ -275,14 +272,8 @@ public class UsersController : ControllerBase
             .FirstOrDefaultAsync();
         if (org is null) return NotFound("Organization not found.");
 
-        var clinics = await _db.Clinics.AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted)
-            .OrderBy(x => x.Name)
-            .ToListAsync();
-        var clinicIds = clinics.Select(c => c.Id).ToArray();
-
         var branches = await _db.Branches.AsNoTracking()
-            .Where(x => clinicIds.Contains(x.ClinicId) && !x.IsDeleted)
+            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted)
             .OrderBy(x => x.Name)
             .ToListAsync();
 
@@ -302,35 +293,26 @@ public class UsersController : ControllerBase
             u.DisplayName,
             u.Email,
             u.IsActive,
-            u.ClinicId,
             u.BranchId,
             Roles = roleMap.TryGetValue(u.Id, out var r) ? r : new List<string>(),
             LastLoginAt = lastLogins.TryGetValue(u.Id, out var at) ? at : (DateTime?)null
         };
 
-        var labs = clinics.Select(c => new
+        var branchNodes = branches.Select(b => new
         {
-            c.Id,
-            c.Code,
-            c.Name,
-            c.IsActive,
-            Users = users.Where(u => u.ClinicId == c.Id && !u.BranchId.HasValue).Select(UserNode).ToList(),
-            Branches = branches.Where(b => b.ClinicId == c.Id).Select(b => new
-            {
-                b.Id,
-                b.Code,
-                b.Name,
-                b.IsActive,
-                Users = users.Where(u => u.BranchId == b.Id).Select(UserNode).ToList()
-            }).ToList()
+            b.Id,
+            b.Code,
+            b.Name,
+            b.IsActive,
+            Users = users.Where(u => u.BranchId == b.Id).Select(UserNode).ToList()
         }).ToList();
 
         var unassigned = users
-            .Where(u => !u.ClinicId.HasValue || !clinicIds.Contains(u.ClinicId.Value))
+            .Where(u => !u.BranchId.HasValue || !branches.Any(b => b.Id == u.BranchId.Value))
             .Select(UserNode)
             .ToList();
 
-        return Ok(new { organization = org, labs, unassigned });
+        return Ok(new { organization = org, branches = branchNodes, unassigned });
     }
 
     [HttpGet("login-history")]

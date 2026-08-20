@@ -2,7 +2,7 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AuthService, LabClinicOption } from '../core/auth.service';
+import { AuthService, OrganizationOption, AuthBranchOption } from '../core/auth.service';
 
 @Component({
   standalone: true,
@@ -16,78 +16,91 @@ export class LoginComponent implements OnInit {
   usernameOrEmail = '';
   password = '';
   error = '';
-  locations: LabClinicOption[] = [];
-  selectedClinicId: number | null = null;
+  organizations: OrganizationOption[] = [];
+  branches: AuthBranchOption[] = [];
+  selectedOrganizationId: number | null = null;
   selectedBranchId: number | null = null;
-  loadingLocations = false;
+  loadingOrganizations = false;
+  loadingBranches = false;
 
   ngOnInit(): void {
-    this.loadLocations();
+    this.loadOrganizations();
   }
 
-  get selectedClinic(): LabClinicOption | undefined {
-    return this.locations.find((clinic) => clinic.clinicId === this.selectedClinicId);
-  }
-
-  get requiresBranchSelection(): boolean {
-    return (this.selectedClinic?.branches.length ?? 0) > 0;
-  }
-
-  onClinicChange(): void {
-    const branches = this.selectedClinic?.branches ?? [];
-    if (!branches.some((branch) => branch.branchId === this.selectedBranchId)) {
-      this.selectedBranchId = branches.length === 1 ? branches[0].branchId : null;
+  onOrganizationChange(): void {
+    this.selectedBranchId = null;
+    this.branches = [];
+    if (this.selectedOrganizationId) {
+      this.loadBranches(this.selectedOrganizationId);
     }
   }
 
   submit() {
     this.error = '';
-    if (!this.selectedClinicId) {
-      this.error = 'Please select a lab location.';
+    if (!this.selectedOrganizationId) {
+      this.error = 'Please select an organization.';
       return;
     }
-    if (this.requiresBranchSelection && !this.selectedBranchId) {
-      this.error = 'Please select a branch for this lab location.';
+    if (!this.selectedBranchId) {
+      this.error = 'Please select a branch.';
       return;
     }
     this.auth
-      .login(this.usernameOrEmail, this.password, this.selectedClinicId, this.selectedBranchId)
+      .login(this.usernameOrEmail, this.password, this.selectedOrganizationId, this.selectedBranchId)
       .subscribe({
         next: () => {},
         error: (e) => (this.error = e?.error?.title || e?.error || 'Invalid username or password'),
       });
   }
 
-  private loadLocations(): void {
-    this.loadingLocations = true;
-    this.auth.getLabLocations().subscribe({
+  private loadOrganizations(): void {
+    this.loadingOrganizations = true;
+    this.auth.getOrganizations().subscribe({
       next: (items) => {
-        this.locations = items ?? [];
-        if (!this.locations.length) {
-          this.error = 'No active lab locations are configured. Contact administrator.';
-          this.loadingLocations = false;
+        this.organizations = items ?? [];
+        if (!this.organizations.length) {
+          this.error = 'No active organizations are configured. Contact administrator.';
+          this.loadingOrganizations = false;
           return;
         }
 
-        const storedClinicId = this.auth.getSelectedClinicId();
-        const fallbackClinicId = this.locations[0].clinicId;
-        this.selectedClinicId = this.locations.some((x) => x.clinicId === storedClinicId)
-          ? storedClinicId
-          : fallbackClinicId;
+        const storedOrgId = this.auth.getSelectedOrganizationId();
+        const fallbackOrgId = this.organizations[0].id;
+        this.selectedOrganizationId = this.organizations.some((x) => x.id === storedOrgId)
+          ? storedOrgId
+          : fallbackOrgId;
 
-        const branches = this.selectedClinic?.branches ?? [];
-        const storedBranchId = this.auth.getSelectedBranchId();
-        this.selectedBranchId = branches.some((x) => x.branchId === storedBranchId)
-          ? storedBranchId
-          : branches.length === 1
-            ? branches[0].branchId
-            : null;
+        if (this.selectedOrganizationId) {
+          this.loadBranches(this.selectedOrganizationId);
+        }
 
-        this.loadingLocations = false;
+        this.loadingOrganizations = false;
       },
       error: (e) => {
-        this.loadingLocations = false;
-        this.error = e?.error?.title || e?.error || 'Unable to load lab locations.';
+        this.loadingOrganizations = false;
+        this.error = e?.error?.title || e?.error || 'Unable to load organizations.';
+      },
+    });
+  }
+
+  private loadBranches(orgId: number): void {
+    this.loadingBranches = true;
+    this.auth.getBranches(orgId).subscribe({
+      next: (items) => {
+        this.branches = items ?? [];
+
+        const storedBranchId = this.auth.getSelectedBranchId();
+        this.selectedBranchId = this.branches.some((x) => x.id === storedBranchId)
+          ? storedBranchId
+          : this.branches.length === 1
+            ? this.branches[0].id
+            : null;
+
+        this.loadingBranches = false;
+      },
+      error: (e) => {
+        this.loadingBranches = false;
+        this.branches = [];
       },
     });
   }

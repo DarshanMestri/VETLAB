@@ -33,51 +33,45 @@ namespace VetLims.WebApi.Controllers
         {
             public string UsernameOrEmail { get; set; } = "";
             public string Password { get; set; } = "";
-            public int? ClinicId { get; set; }
+            public int? OrganizationId { get; set; }
             public int? BranchId { get; set; }
         }
 
-        public record LabLocationBranchDto(int BranchId, string BranchCode, string BranchName);
-        public record LabLocationClinicDto(int ClinicId, string ClinicCode, string ClinicName, IReadOnlyCollection<LabLocationBranchDto> Branches);
+        public record OrganizationDto(int Id, string Code, string Name);
+        public record BranchDto(int Id, string Code, string Name, int ClinicId, string ClinicName, int LaboratoryId, string LaboratoryName);
 
-        [HttpGet("lab-locations")]
-        public async Task<ActionResult<IReadOnlyCollection<LabLocationClinicDto>>> LabLocations()
+        [HttpGet("organizations")]
+        public async Task<ActionResult<IReadOnlyCollection<OrganizationDto>>> Organizations()
         {
-            await EnsureDefaultLocationHierarchyAsync();
-
-            var clinics = await _db.Clinics
+            var orgs = await _db.Organizations
                 .AsNoTracking()
-                .Where(c => c.IsActive)
-                .OrderBy(c => c.Name)
-                .Select(c => new { c.Id, c.Code, c.Name })
+                .Where(o => o.IsActive)
+                .OrderBy(o => o.Name)
+                .Select(o => new OrganizationDto(o.Id, o.Code, o.Name))
                 .ToListAsync();
+
+            return Ok(orgs);
+        }
+
+        [HttpGet("branches")]
+        public async Task<ActionResult<IReadOnlyCollection<BranchDto>>> Branches([FromQuery] int organizationId)
+        {
+            var orgExists = await _db.Organizations
+                .AsNoTracking()
+                .AnyAsync(o => o.Id == organizationId && o.IsActive);
+            if (!orgExists)
+                return BadRequest("Invalid or inactive organization.");
 
             var branches = await _db.Branches
                 .AsNoTracking()
-                .Where(b => b.IsActive)
+                .Include(b => b.Clinic)
+                .Include(b => b.Laboratory)
+                .Where(b => b.IsActive && b.OrganizationId == organizationId)
                 .OrderBy(b => b.Name)
-                .Select(b => new { b.Id, b.Code, b.Name, b.ClinicId })
+                .Select(b => new BranchDto(b.Id, b.Code, b.Name, b.ClinicId, b.Clinic.Name, b.LaboratoryId, b.Laboratory.Name))
                 .ToListAsync();
 
-            var branchLookup = branches
-                .GroupBy(b => b.ClinicId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (IReadOnlyCollection<LabLocationBranchDto>)g
-                        .Select(x => new LabLocationBranchDto(x.Id, x.Code, x.Name))
-                        .ToList());
-
-            var response = clinics
-                .Select(c => new LabLocationClinicDto(
-                    c.Id,
-                    c.Code,
-                    c.Name,
-                    branchLookup.TryGetValue(c.Id, out var clinicBranches)
-                        ? clinicBranches
-                        : Array.Empty<LabLocationBranchDto>()))
-                .ToList();
-
-            return Ok(response);
+            return Ok(branches);
         }
 
         [HttpPost("login")]
@@ -86,48 +80,36 @@ namespace VetLims.WebApi.Controllers
             if (string.IsNullOrWhiteSpace(req.UsernameOrEmail) || string.IsNullOrWhiteSpace(req.Password))
                 return BadRequest("Username/email and password are required.");
 
-            await EnsureDefaultLocationHierarchyAsync();
-
-            if (!req.ClinicId.HasValue)
+            if (!req.OrganizationId.HasValue)
             {
-                req.ClinicId = await _db.Clinics
+                req.OrganizationId = await _db.Organizations
                     .AsNoTracking()
-                    .Where(c => c.IsActive)
-                    .OrderBy(c => c.Id)
-                    .Select(c => (int?)c.Id)
+                    .Where(o => o.IsActive)
+                    .OrderBy(o => o.Id)
+                    .Select(o => (int?)o.Id)
                     .FirstOrDefaultAsync();
             }
-            if (!req.ClinicId.HasValue)
-                return BadRequest("Lab location is required.");
+            if (!req.OrganizationId.HasValue)
+                return BadRequest("Organization is required.");
 
-            var clinic = await _db.Clinics
+            var organization = await _db.Organizations
                 .AsNoTracking()
-                .Include(c => c.Organization)
-                .FirstOrDefaultAsync(c => c.Id == req.ClinicId.Value && c.IsActive);
-            if (clinic == null)
-                return BadRequest("Selected lab location is invalid or inactive.");
-            if (!clinic.OrganizationId.HasValue || clinic.Organization == null)
-                return Problem(
-                    statusCode: StatusCodes.Status500InternalServerError,
-                    detail: "Selected lab location is not assigned to an organization.");
+                .FirstOrDefaultAsync(o => o.Id == req.OrganizationId.Value && o.IsActive);
+            if (organization == null)
+                return BadRequest("Selected organization is invalid or inactive.");
 
-            var activeBranches = await _db.Branches.AsNoTracking()
-                .Where(b => b.IsActive && b.ClinicId == clinic.Id)
-                .OrderBy(b => b.Name)
-                .ToListAsync();
+            if (!req.BranchId.HasValue)
+                return BadRequest("Branch is required.");
 
-            if (activeBranches.Count == 1 && !req.BranchId.HasValue)
-                req.BranchId = activeBranches[0].Id;
-
-            if (activeBranches.Count > 0 && !req.BranchId.HasValue)
-                return BadRequest("Branch is required for the selected lab location.");
-
-            var branch = req.BranchId.HasValue
-                ? activeBranches.FirstOrDefault(b => b.Id == req.BranchId.Value)
-                : null;
-
-            if (req.BranchId.HasValue && branch == null)
+            var branch = await _db.Branches
+                .AsNoTracking()
+                .Include(b => b.Organization)
+                .FirstOrDefaultAsync(b => b.Id == req.BranchId.Value && b.IsActive);
+            if (branch == null)
                 return BadRequest("Selected branch is invalid or inactive.");
+
+            if (branch.OrganizationId != organization.Id)
+                return BadRequest("Selected branch does not belong to the selected organization.");
 
             // Try username, then email
             var user = await _users.FindByNameAsync(req.UsernameOrEmail)
@@ -135,9 +117,7 @@ namespace VetLims.WebApi.Controllers
 
             if (user == null) return Unauthorized("Invalid credentials");
 
-            // Optional: if you have IsActive on AppUser
-            var isActiveProp = user.GetType().GetProperty("IsActive");
-            if (isActiveProp != null && isActiveProp.GetValue(user) is bool active && !active)
+            if (!user.IsActive)
             {
                 await RecordLoginAsync(user.Id, false, "User disabled");
                 return Unauthorized("User disabled");
@@ -150,39 +130,84 @@ namespace VetLims.WebApi.Controllers
                 return Unauthorized("Invalid credentials");
             }
 
+            // Check user branch access
+            var roles = await _users.GetRolesAsync(user);
+            var isAdmin = roles.Contains("Admin", StringComparer.OrdinalIgnoreCase) ||
+                          roles.Contains("SuperAdmin", StringComparer.OrdinalIgnoreCase);
+
+            if (!isAdmin)
+            {
+                var hasAccess = await _db.UserLocations
+                    .AsNoTracking()
+                    .AnyAsync(ul => ul.UserId == user.Id && ul.BranchId == req.BranchId.Value);
+                if (!hasAccess)
+                {
+                    await RecordLoginAsync(user.Id, false, "Branch access denied");
+                    return Forbid("You do not have access to the selected branch.");
+                }
+            }
+
+            // Get clinic and laboratory for the branch
+            var clinic = await _db.Clinics.AsNoTracking().FirstOrDefaultAsync(c => c.Id == branch.ClinicId);
+            var laboratory = await _db.Laboratories.AsNoTracking().FirstOrDefaultAsync(l => l.Id == branch.LaboratoryId);
+
+            // Determine access flags
+            bool hasClinicAccess, hasLaboratoryAccess;
+            if (isAdmin)
+            {
+                hasClinicAccess = true;
+                hasLaboratoryAccess = true;
+            }
+            else
+            {
+                var userLocation = await _db.UserLocations
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(ul => ul.UserId == user.Id && ul.BranchId == req.BranchId.Value);
+                hasClinicAccess = userLocation?.HasClinicAccess ?? false;
+                hasLaboratoryAccess = userLocation?.HasLaboratoryAccess ?? false;
+            }
+
             // Create JWT
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Name, user.UserName ?? ""),
-                new("organization_id", clinic.OrganizationId.Value.ToString()),
-                new("organization_name", clinic.Organization.Name ?? string.Empty),
-                new("clinic_id", clinic.Id.ToString()),
-                new("clinic_name", clinic.Name)
+                new("organization_id", organization.Id.ToString()),
+                new("organization_name", organization.Name ?? string.Empty),
+                new("laboratory_id", laboratory?.Id.ToString() ?? ""),
+                new("laboratory_name", laboratory?.Name ?? ""),
+                new("branch_id", branch.Id.ToString()),
+                new("branch_name", branch.Name),
+                new("clinic_access", hasClinicAccess.ToString().ToLower()),
+                new("laboratory_access", hasLaboratoryAccess.ToString().ToLower())
             };
-            if (branch != null)
+
+            // Include all assigned branches for this user within the organization
+            var assignedBranchIds = await _db.UserLocations
+                .AsNoTracking()
+                .Where(ul => ul.UserId == user.Id)
+                .Join(_db.Branches, ul => ul.BranchId, b => b.Id, (ul, b) => new { ul, b })
+                .Where(x => x.b.OrganizationId == organization.Id)
+                .Select(x => x.ul.BranchId)
+                .ToListAsync();
+
+            // Admin gets all branches in the org
+            if (isAdmin)
             {
-                claims.Add(new Claim("branch_id", branch.Id.ToString()));
-                claims.Add(new Claim("branch_name", branch.Name));
+                assignedBranchIds = await _db.Branches
+                    .AsNoTracking()
+                    .Where(b => b.IsActive && b.OrganizationId == organization.Id)
+                    .Select(b => b.Id)
+                    .ToListAsync();
             }
 
-            // If user has multiple assigned branches, include as comma-separated claim
-            var assignedBranches = await _db.UserLocations.AsNoTracking().Where(ul => ul.UserId == user.Id).Select(ul => ul.BranchId).ToListAsync();
-            if (assignedBranches.Count > 0)
+            if (assignedBranchIds.Count > 0)
             {
-                var csv = string.Join(',', assignedBranches);
+                var csv = string.Join(',', assignedBranchIds);
                 claims.Add(new Claim("branch_ids", csv));
-
-                // If no branch selected but user has a default, include it
-                if (!claims.Any(c => c.Type == "branch_id"))
-                {
-                    var defaultBranch = await _db.UserLocations.AsNoTracking().Where(ul => ul.UserId == user.Id && ul.IsDefault).Select(ul => (int?)ul.BranchId).FirstOrDefaultAsync();
-                    if (defaultBranch.HasValue) claims.Add(new Claim("branch_id", defaultBranch.Value.ToString()));
-                }
             }
 
             // Add roles
-            var roles = await _users.GetRolesAsync(user);
             foreach (var r in roles) claims.Add(new Claim(ClaimTypes.Role, r));
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_cfg["Jwt:Key"] ?? "dev-key-change-me"));
@@ -201,8 +226,8 @@ namespace VetLims.WebApi.Controllers
             return Ok(new
             {
                 token = new JwtSecurityTokenHandler().WriteToken(token),
-                clinicId = clinic.Id,
-                branchId = branch?.Id
+                organizationId = organization.Id,
+                branchId = branch.Id
             });
         }
 
@@ -226,43 +251,5 @@ namespace VetLims.WebApi.Controllers
             }
         }
 
-        private async Task EnsureDefaultLocationHierarchyAsync()
-        {
-            var hasActiveClinic = await _db.Clinics.AsNoTracking().AnyAsync(c => c.IsActive);
-            if (hasActiveClinic) return;
-
-            var organization = await _db.Organizations.FirstOrDefaultAsync(x => x.IsActive);
-            if (organization == null)
-            {
-                organization = new Infrastructure.Entities.Organization
-                {
-                    Code = "DEFAULT",
-                    Name = "Default Organization",
-                    IsActive = true
-                };
-                _db.Organizations.Add(organization);
-                await _db.SaveChangesAsync();
-            }
-
-            var clinic = new Infrastructure.Entities.Clinic
-            {
-                OrganizationId = organization.Id,
-                Code = "MAINLAB",
-                Name = "Main Laboratory",
-                IsActive = true
-            };
-            _db.Clinics.Add(clinic);
-            await _db.SaveChangesAsSystemAsync(organization.Id);
-
-            var branch = new Infrastructure.Entities.Branch
-            {
-                ClinicId = clinic.Id,
-                Code = "MAIN",
-                Name = "Main Location",
-                IsActive = true
-            };
-            _db.Branches.Add(branch);
-            await _db.SaveChangesAsync();
-        }
     }
 }

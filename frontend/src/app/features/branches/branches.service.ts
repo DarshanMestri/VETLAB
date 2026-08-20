@@ -4,7 +4,9 @@ import { Observable, map } from 'rxjs';
 
 export interface BranchListItem {
   id: number;
-  clinicId: number;
+  organizationId: number;
+  clinicId?: number | null;
+  laboratoryId?: number | null;
   code: string;
   name: string;
   address?: string | null;
@@ -12,10 +14,12 @@ export interface BranchListItem {
   email?: string | null;
   isActive: boolean;
   clinicName?: string | null;
+  laboratoryName?: string | null;
 }
 
 export interface BranchCreateRequest {
-  clinicId: number;
+  clinicId?: number | null;
+  laboratoryId?: number | null;
   code: string;
   name: string;
   address?: string | null;
@@ -39,6 +43,21 @@ export interface ClinicOption {
 
 interface PagedClinicResponse {
   items?: ClinicOption[];
+}
+
+export interface LaboratoryOption {
+  id: number;
+  organizationId: number;
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  isActive: boolean;
+}
+
+interface PagedLaboratoryResponse {
+  items?: LaboratoryOption[];
 }
 
 export interface BranchDepartmentAssignment {
@@ -95,9 +114,23 @@ export class BranchesService {
     return this.http.patch<void>(`${this.base}/${id}/status`, isActive);
   }
 
-  getClinics(): Observable<ClinicOption[]> {
+  getClinics(organizationId?: number): Observable<ClinicOption[]> {
+    const params: Record<string, string> = {};
+    if (organizationId != null) {
+      params.organizationId = organizationId.toString();
+    }
     return this.http
-      .get<PagedClinicResponse>('/api/clinics')
+      .get<PagedClinicResponse>('/api/clinics', { params })
+      .pipe(map((response) => response.items ?? []));
+  }
+
+  getLaboratories(organizationId?: number): Observable<LaboratoryOption[]> {
+    const params: Record<string, string> = {};
+    if (organizationId != null) {
+      params.organizationId = organizationId.toString();
+    }
+    return this.http
+      .get<PagedLaboratoryResponse>('/api/laboratories', { params })
       .pipe(map((response) => response.items ?? []));
   }
 

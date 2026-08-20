@@ -10,8 +10,12 @@ public interface ICurrentUserService
 
     // Tenant context extracted from JWT
     int? OrganizationId { get; }
-    int? ClinicId { get; }
+    int? LaboratoryId { get; }
     int? BranchId { get; }
+
+    // Access flags
+    bool HasClinicAccess { get; }
+    bool HasLaboratoryAccess { get; }
 
     // If user has multiple assigned branches, this will contain them
     IReadOnlyCollection<int> BranchIds { get; }

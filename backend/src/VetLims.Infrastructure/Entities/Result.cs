@@ -18,8 +18,8 @@ public class Result : BaseEntity
     public int? RegistrationAnimalId { get; set; }
     public RegistrationAnimal? RegistrationAnimal { get; set; }
 
-    public int? ClinicId { get; set; }
-    public Clinic? Clinic { get; set; }
+    public int? LaboratoryId { get; set; }
+    public Laboratory? Laboratory { get; set; }
 
     public int? BranchId { get; set; }
     public Branch? Branch { get; set; }
@@ -44,8 +44,8 @@ public class ResultValue : BaseEntity
     public int ResultId { get; set; }
     public Result Result { get; set; } = default!;
 
-    public int? ClinicId { get; set; }
-    public Clinic? Clinic { get; set; }
+    public int? LaboratoryId { get; set; }
+    public Laboratory? Laboratory { get; set; }
 
     public int? BranchId { get; set; }
     public Branch? Branch { get; set; }
@@ -65,7 +65,7 @@ public class ResultValue : BaseEntity
     public string? ImageUrl { get; set; }
     public string? PdfAttachmentUrl { get; set; }
 
-    // snapshot for unit text at time of entry (so later unit name changes don’t break reports)
+    // snapshot for unit text at time of entry (so later unit name changes don't break reports)
     public string? UnitSymbol { get; set; }
 
     // computed flags using Ref Ranges (by species + ageDays)

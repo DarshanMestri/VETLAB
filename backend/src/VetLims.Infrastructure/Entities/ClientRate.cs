@@ -5,8 +5,8 @@ public class ClientRate : BaseEntity
     public int ClientId { get; set; }
     public Client Client { get; set; } = default!;
 
-    public int? ClinicId { get; set; }
-    public Clinic? Clinic { get; set; }
+    public int? LaboratoryId { get; set; }
+    public Laboratory? Laboratory { get; set; }
 
     public int? BranchId { get; set; }
     public Branch? Branch { get; set; }

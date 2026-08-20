@@ -9,10 +9,15 @@ public enum LocationType
     MobileLaboratory = 5
 }
 
-public class Branch : BaseEntity
+public class Branch : BaseEntity, IOrganizationOwned
 {
+    public Organization Organization { get; set; } = default!;
+
     public int ClinicId { get; set; }
     public Clinic Clinic { get; set; } = default!;
+
+    public int LaboratoryId { get; set; }
+    public Laboratory Laboratory { get; set; } = default!;
 
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

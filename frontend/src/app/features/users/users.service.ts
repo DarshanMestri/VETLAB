@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
 export interface UserListItem {
   id: number;
@@ -8,7 +8,6 @@ export interface UserListItem {
   email: string;
   displayName: string;
   organizationId: number | null;
-  clinicId: number | null;
   branchId: number | null;
   isActive: boolean;
   roles: string[];
@@ -19,17 +18,22 @@ export interface RoleOption {
   name: string;
 }
 
-export interface BranchOption {
-  branchId: number;
-  branchCode: string;
-  branchName: string;
+export interface OrganizationOption {
+  id: number;
+  code: string;
+  name: string;
 }
 
-export interface ClinicOption {
-  clinicId: number;
-  clinicCode: string;
-  clinicName: string;
-  branches: BranchOption[];
+export interface BranchOption {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface BranchAccess {
+  branchId: number;
+  hasClinicAccess: boolean;
+  hasLaboratoryAccess: boolean;
 }
 
 export interface CreateUserRequest {
@@ -38,8 +42,8 @@ export interface CreateUserRequest {
   displayName: string;
   password: string;
   roleName: string;
-  clinicId: number | null;
-  branchId: number | null;
+  organizationId: number;
+  branchAccess: BranchAccess[];
   isActive: boolean;
 }
 
@@ -48,10 +52,14 @@ export interface UpdateUserRequest {
   email: string;
   displayName: string;
   roleName: string;
-  clinicId: number | null;
-  branchId: number | null;
+  organizationId: number;
+  branchAccess: BranchAccess[];
   isActive: boolean;
   newPassword?: string;
+}
+
+interface PagedResponse<T> {
+  items?: T[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -80,7 +88,15 @@ export class UsersService {
     return this.http.get<RoleOption[]>('/api/roles');
   }
 
-  listLocations(): Observable<ClinicOption[]> {
-    return this.http.get<ClinicOption[]>('/api/auth/lab-locations');
+  listOrganizations(): Observable<OrganizationOption[]> {
+    return this.http
+      .get<PagedResponse<OrganizationOption>>('/api/organizations')
+      .pipe(map((res) => res.items ?? []));
+  }
+
+  listBranches(organizationId: number): Observable<BranchOption[]> {
+    return this.http.get<BranchOption[]>('/api/auth/branches', {
+      params: { organizationId: String(organizationId) },
+    });
   }
 }

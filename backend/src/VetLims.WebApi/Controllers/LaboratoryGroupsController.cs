@@ -42,7 +42,7 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
                 x.CreatedDate,
                 x.ModifiedDate,
                 x.IsDeleted,
-                db.Clinics.Count(c => c.OrganizationId == organizationId.Value && !c.IsDeleted && c.LaboratoryGroupId == x.Id)))
+                db.Laboratories.Count(c => c.OrganizationId == organizationId.Value && !c.IsDeleted && c.LaboratoryGroupId == x.Id)))
             .ToListAsync();
 
         return Ok(new { total, page, pageSize, items });
@@ -61,7 +61,7 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
         if (item is null)
             return NotFound();
 
-        var clinicCount = await db.Clinics.CountAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.LaboratoryGroupId == id);
+        var laboratoryCount = await db.Laboratories.CountAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.LaboratoryGroupId == id);
 
         return Ok(new LaboratoryGroupDto(
             item.Id,
@@ -73,7 +73,7 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
             item.CreatedDate,
             item.ModifiedDate,
             item.IsDeleted,
-            clinicCount));
+            laboratoryCount));
     }
 
     [HttpPost]
@@ -171,7 +171,7 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
 
         await db.SaveChangesAsync();
 
-        var clinicCount = await db.Clinics.CountAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.LaboratoryGroupId == id);
+        var laboratoryCount = await db.Laboratories.CountAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.LaboratoryGroupId == id);
 
         return Ok(new LaboratoryGroupDto(
             item.Id,
@@ -183,7 +183,7 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
             item.CreatedDate,
             item.ModifiedDate,
             item.IsDeleted,
-            clinicCount));
+            laboratoryCount));
     }
 
     [HttpPatch("{id:int}/status")]
@@ -202,8 +202,8 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
         return NoContent();
     }
 
-    [HttpPut("{laboratoryGroupId:int}/clinics/{clinicId:int}")]
-    public async Task<ActionResult<LaboratoryGroupClinicDto>> AssignClinic(int laboratoryGroupId, int clinicId)
+    [HttpPut("{laboratoryGroupId:int}/laboratories/{laboratoryId:int}")]
+    public async Task<ActionResult<LaboratoryGroupLaboratoryDto>> AssignLaboratory(int laboratoryGroupId, int laboratoryId)
     {
         var organizationId = await ResolveCurrentOrganizationIdAsync();
         if (!organizationId.HasValue)
@@ -214,23 +214,23 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
             return NotFound();
 
         if (!labGroup.IsActive)
-            return Conflict("Laboratory group is inactive and cannot accept new clinic assignments.");
+            return Conflict("Laboratory group is inactive and cannot accept new laboratory assignments.");
 
-        var clinic = await db.Clinics.FirstOrDefaultAsync(x => x.Id == clinicId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
-        if (clinic is null)
+        var laboratory = await db.Laboratories.FirstOrDefaultAsync(x => x.Id == laboratoryId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
+        if (laboratory is null)
             return NotFound();
 
-        if (clinic.OrganizationId != labGroup.OrganizationId)
-            return Conflict("Clinic and laboratory group must belong to the same organization.");
+        if (laboratory.OrganizationId != labGroup.OrganizationId)
+            return Conflict("Laboratory and laboratory group must belong to the same organization.");
 
-        clinic.LaboratoryGroupId = labGroup.Id;
+        laboratory.LaboratoryGroupId = labGroup.Id;
         await db.SaveChangesAsync();
 
-        return Ok(new LaboratoryGroupClinicDto(clinic.Id, clinic.OrganizationId!.Value, clinic.Code, clinic.Name, clinic.ShortName, clinic.IsActive, clinic.LaboratoryGroupId));
+        return Ok(new LaboratoryGroupLaboratoryDto(laboratory.Id, laboratory.OrganizationId!.Value, laboratory.Code, laboratory.Name, laboratory.ShortName, laboratory.IsActive, laboratory.LaboratoryGroupId));
     }
 
-    [HttpDelete("{laboratoryGroupId:int}/clinics/{clinicId:int}")]
-    public async Task<IActionResult> UnassignClinic(int laboratoryGroupId, int clinicId)
+    [HttpDelete("{laboratoryGroupId:int}/laboratories/{laboratoryId:int}")]
+    public async Task<IActionResult> UnassignLaboratory(int laboratoryGroupId, int laboratoryId)
     {
         var organizationId = await ResolveCurrentOrganizationIdAsync();
         if (!organizationId.HasValue)
@@ -240,21 +240,21 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
         if (labGroup is null)
             return NotFound();
 
-        var clinic = await db.Clinics.FirstOrDefaultAsync(x => x.Id == clinicId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
-        if (clinic is null)
+        var laboratory = await db.Laboratories.FirstOrDefaultAsync(x => x.Id == laboratoryId && x.OrganizationId == organizationId.Value && !x.IsDeleted);
+        if (laboratory is null)
             return NotFound();
 
-        if (clinic.LaboratoryGroupId != laboratoryGroupId)
-            return Conflict("Clinic is not assigned to the specified laboratory group.");
+        if (laboratory.LaboratoryGroupId != laboratoryGroupId)
+            return Conflict("Laboratory is not assigned to the specified laboratory group.");
 
-        clinic.LaboratoryGroupId = null;
+        laboratory.LaboratoryGroupId = null;
         await db.SaveChangesAsync();
 
         return NoContent();
     }
 
-    [HttpGet("{id:int}/clinics")]
-    public async Task<ActionResult<IEnumerable<LaboratoryGroupClinicDto>>> ListClinics(int id)
+    [HttpGet("{id:int}/laboratories")]
+    public async Task<ActionResult<IEnumerable<LaboratoryGroupLaboratoryDto>>> ListLaboratories(int id)
     {
         var organizationId = await ResolveCurrentOrganizationIdAsync();
         if (!organizationId.HasValue)
@@ -265,10 +265,10 @@ public class LaboratoryGroupsController(VetLimsDbContext db, ICurrentUserService
         if (labGroup is null)
             return NotFound();
 
-        var items = await db.Clinics.AsNoTracking()
+        var items = await db.Laboratories.AsNoTracking()
             .Where(x => x.OrganizationId == organizationId.Value && x.LaboratoryGroupId == id && !x.IsDeleted)
             .OrderBy(x => x.Name)
-            .Select(x => new LaboratoryGroupClinicDto(
+            .Select(x => new LaboratoryGroupLaboratoryDto(
                 x.Id,
                 x.OrganizationId!.Value,
                 x.Code,
