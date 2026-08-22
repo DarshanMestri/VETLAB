@@ -42,10 +42,16 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         var items = await q.OrderBy(x => x.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new ClinicDto(x.Id, x.OrganizationId!.Value, x.Code, x.Name, x.ShortName, x.Phone, x.Email, x.Address, x.Logo, x.LicenseNumber, x.IsActive))
+            .Select(x => new { x.Id, x.OrganizationId, x.Code, x.Name, x.ShortName, x.Phone, x.Email, x.Address, x.Logo, x.LicenseNumber, x.IsActive, OrganizationName = db.Organizations.Where(o => o.Id == x.OrganizationId).Select(o => (string?)o.Name).FirstOrDefault() })
             .ToListAsync();
 
-        return Ok(new { total, page, pageSize, items });
+        return Ok(new
+        {
+            total,
+            page,
+            pageSize,
+            items = items.Select(x => new ClinicDto(x.Id, x.OrganizationId!.Value, x.OrganizationName, x.Code, x.Name, x.ShortName, x.Phone, x.Email, x.Address, x.Logo, x.LicenseNumber, x.IsActive))
+        });
     }
 
     [HttpGet("{id:int}")]
@@ -58,13 +64,15 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         var item = await db.Clinics.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
-        return Ok(new ClinicDto(item.Id, item.OrganizationId!.Value, item.Code, item.Name, item.ShortName, item.Phone, item.Email, item.Address, item.Logo, item.LicenseNumber, item.IsActive));
+        return Ok(ToDto(item));
     }
 
     [HttpPost]
     public async Task<ActionResult<ClinicDto>> Create([FromBody] ClinicCreateDto dto)
     {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
+        // The caller may place the new clinic under any active organization
+        // (defaults to their own home organization when omitted).
+        var organizationId = await ResolveTargetOrganizationIdAsync(dto.OrganizationId);
         if (!organizationId.HasValue)
             return Forbid();
 
@@ -89,9 +97,9 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         };
 
         db.Clinics.Add(item);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsSystemAsync(organizationId.Value);
 
-        return CreatedAtAction(nameof(Get), new { id = item.Id }, new ClinicDto(item.Id, item.OrganizationId!.Value, item.Code, item.Name, item.ShortName, item.Phone, item.Email, item.Address, item.Logo, item.LicenseNumber, item.IsActive));
+        return CreatedAtAction(nameof(Get), new { id = item.Id }, ToDto(item));
     }
 
     [HttpPut("{id:int}")]
@@ -121,7 +129,7 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         item.IsActive = dto.IsActive;
 
         await db.SaveChangesAsync();
-        return Ok(new ClinicDto(item.Id, item.OrganizationId!.Value, item.Code, item.Name, item.ShortName, item.Phone, item.Email, item.Address, item.Logo, item.LicenseNumber, item.IsActive));
+        return Ok(ToDto(item));
     }
 
     [HttpPatch("{id:int}/status")]
@@ -138,6 +146,11 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
         return NoContent();
     }
 
+    private ClinicDto ToDto(Clinic item) =>
+        new(item.Id, item.OrganizationId!.Value,
+            db.Organizations.AsNoTracking().Where(o => o.Id == item.OrganizationId!.Value).Select(o => (string?)o.Name).FirstOrDefault() ?? string.Empty,
+            item.Code, item.Name, item.ShortName, item.Phone, item.Email, item.Address, item.Logo, item.LicenseNumber, item.IsActive);
+
     private Task<int?> ResolveCurrentOrganizationIdAsync()
     {
         var orgId = currentUserService.OrganizationId;
@@ -148,5 +161,15 @@ public class ClinicsController(VetLimsDbContext db, ICurrentUserService currentU
             .Where(x => x.Id == orgId.Value && !x.IsDeleted && x.IsActive)
             .Select(x => (int?)x.Id)
             .FirstOrDefaultAsync();
+    }
+
+    private async Task<int?> ResolveTargetOrganizationIdAsync(int? requestedOrganizationId)
+    {
+        if (!requestedOrganizationId.HasValue)
+            return await ResolveCurrentOrganizationIdAsync();
+
+        var exists = await db.Organizations.AsNoTracking()
+            .AnyAsync(x => x.Id == requestedOrganizationId.Value && !x.IsDeleted && x.IsActive);
+        return exists ? requestedOrganizationId : null;
     }
 }

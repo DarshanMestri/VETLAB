@@ -832,9 +832,13 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClinicId");
+                    b.HasIndex("ClinicId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
-                    b.HasIndex("LaboratoryId");
+                    b.HasIndex("LaboratoryId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.HasIndex("OrganizationId", "Code")
                         .IsUnique();
@@ -2177,9 +2181,6 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<int?>("LaboratoryGroupId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Language")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -2240,83 +2241,12 @@ namespace VetLims.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LaboratoryGroupId");
-
                     b.HasIndex("Name");
 
                     b.HasIndex("OrganizationId", "Code")
                         .IsUnique();
 
                     b.ToTable("laboratories", (string)null);
-                });
-
-            modelBuilder.Entity("VetLims.Infrastructure.Entities.LaboratoryGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DeletedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("OrganizationId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("Name");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("OrganizationId", "Code")
-                        .IsUnique();
-
-                    b.ToTable("laboratory_groups", (string)null);
                 });
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.LoginHistory", b =>
@@ -5339,24 +5269,6 @@ namespace VetLims.Infrastructure.Migrations
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.Laboratory", b =>
                 {
-                    b.HasOne("VetLims.Infrastructure.Entities.LaboratoryGroup", "LaboratoryGroup")
-                        .WithMany("Laboratories")
-                        .HasForeignKey("LaboratoryGroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
-                        .WithMany()
-                        .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("LaboratoryGroup");
-
-                    b.Navigation("Organization");
-                });
-
-            modelBuilder.Entity("VetLims.Infrastructure.Entities.LaboratoryGroup", b =>
-                {
                     b.HasOne("VetLims.Infrastructure.Entities.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
@@ -5889,11 +5801,6 @@ namespace VetLims.Infrastructure.Migrations
             modelBuilder.Entity("VetLims.Infrastructure.Entities.InventoryPurchaseReturn", b =>
                 {
                     b.Navigation("Lines");
-                });
-
-            modelBuilder.Entity("VetLims.Infrastructure.Entities.LaboratoryGroup", b =>
-                {
-                    b.Navigation("Laboratories");
                 });
 
             modelBuilder.Entity("VetLims.Infrastructure.Entities.Owner", b =>

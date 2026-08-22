@@ -32,7 +32,7 @@ public class ApiExceptionMiddleware
                 context.Response.StatusCode,
                 new[] { ex.Message });
 
-            var json = JsonSerializer.Serialize(response);
+            var json = JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             await context.Response.WriteAsync(json);
         }
     }

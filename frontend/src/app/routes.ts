@@ -82,15 +82,6 @@ export const routes: Routes = [
   },
 
   {
-    path: 'laboratory-groups',
-    loadComponent: () =>
-      import('./features/laboratory-groups/laboratory-groups-list.component').then(
-        (m) => m.LaboratoryGroupsListComponent,
-      ),
-    canActivate: [authGuard],
-  },
-
-  {
     path: 'branches',
     loadComponent: () =>
       import('./features/branches/branches-list.component').then((m) => m.BranchesListComponent),
@@ -197,6 +188,14 @@ export const routes: Routes = [
     path: 'users',
     loadComponent: () =>
       import('./features/users/users-master.component').then((m) => m.UsersMasterComponent),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] },
+  },
+
+  {
+    path: 'setup-guide',
+    loadComponent: () =>
+      import('./features/admin-guide/setup-guide.component').then((m) => m.SetupGuideComponent),
     canActivate: [authGuard, roleGuard],
     data: { roles: ['Admin'] },
   },

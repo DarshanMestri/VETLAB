@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { LaboratoriesListComponent } from '../laboratories/laboratories-list.component';
 import { BranchesListComponent } from '../branches/branches-list.component';
 import { DepartmentsListComponent } from '../departments/departments-list.component';
-import { LaboratoryGroupsListComponent } from '../laboratory-groups/laboratory-groups-list.component';
 import { UnitsListComponent } from '../units/units-list.component';
 
 interface MasterTab {
@@ -20,7 +19,6 @@ interface MasterTab {
     LaboratoriesListComponent,
     BranchesListComponent,
     DepartmentsListComponent,
-    LaboratoryGroupsListComponent,
     UnitsListComponent,
   ],
   template: `
@@ -55,9 +53,6 @@ interface MasterTab {
         <ng-container *ngIf="activeTab === 'departments'">
           <app-departments-list></app-departments-list>
         </ng-container>
-        <ng-container *ngIf="activeTab === 'laboratory-groups'">
-          <app-laboratory-groups-list></app-laboratory-groups-list>
-        </ng-container>
         <ng-container *ngIf="activeTab === 'units'">
           <app-units-list></app-units-list>
         </ng-container>
@@ -70,7 +65,6 @@ export class LaboratoryMasterComponent {
     { key: 'laboratories', label: 'Laboratories', hint: 'Laboratories (clinics) managed by this organization' },
     { key: 'locations', label: 'Branches', hint: 'Branch locations under each laboratory' },
     { key: 'departments', label: 'Departments', hint: 'Department master used across laboratories' },
-    { key: 'laboratory-groups', label: 'Laboratory Groups', hint: 'Groups that cluster laboratories' },
     { key: 'units', label: 'Units', hint: 'Units used by test results' },
   ];
 

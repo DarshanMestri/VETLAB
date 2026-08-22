@@ -11,9 +11,9 @@ public sealed class OrganizationOwnershipPersistenceTests
     public void Added_owned_entity_gets_tenant_organization_and_audit_fields()
     {
         var context = CreateContext(new TestExecutionContext { OrganizationId = 7, UserName = "tenant-user" });
-        var group = new LaboratoryGroup { Code = "G1", Name = "Group 1" };
+        var group = new Laboratory { Code = "G1", Name = "Group 1" };
 
-        context.LaboratoryGroups.Add(group);
+        context.Laboratories.Add(group);
         context.SaveChanges();
 
         Assert.Equal(7, group.OrganizationId);
@@ -48,7 +48,7 @@ public sealed class OrganizationOwnershipPersistenceTests
     public void Owned_entity_without_tenant_or_system_context_is_rejected()
     {
         var context = CreateContext(null);
-        context.LaboratoryGroups.Add(new LaboratoryGroup { Code = "G1", Name = "Group 1" });
+        context.Laboratories.Add(new Laboratory { Code = "G1", Name = "Group 1" });
 
         Assert.Throws<OrganizationOwnershipException>(() => context.SaveChanges());
     }
@@ -177,14 +177,14 @@ public sealed class OrganizationOwnershipPersistenceTests
     public void Delete_validates_ownership_then_converts_to_soft_delete()
     {
         var context = CreateContext(new TestExecutionContext { OrganizationId = 7, UserName = "deleter" });
-        var group = new LaboratoryGroup { OrganizationId = 7, Code = "G1", Name = "Group 1" };
-        context.LaboratoryGroups.Add(group);
+        var group = new Laboratory { OrganizationId = 7, Code = "G1", Name = "Group 1" };
+        context.Laboratories.Add(group);
         context.SaveChanges();
         context.Entry(group).State = EntityState.Detached;
 
-        var loaded = new LaboratoryGroup { Id = group.Id, OrganizationId = 7, Code = "G1", Name = "Group 1" };
-        context.LaboratoryGroups.Attach(loaded);
-        context.LaboratoryGroups.Remove(loaded);
+        var loaded = new Laboratory { Id = group.Id, OrganizationId = 7, Code = "G1", Name = "Group 1" };
+        context.Laboratories.Attach(loaded);
+        context.Laboratories.Remove(loaded);
         context.SaveChanges();
 
         Assert.True(loaded.IsDeleted);
@@ -197,8 +197,8 @@ public sealed class OrganizationOwnershipPersistenceTests
     public void Modified_owned_entity_without_organization_is_rejected()
     {
         var context = CreateContext(new TestExecutionContext { OrganizationId = 7 });
-        var group = new LaboratoryGroup { Code = "G1", Name = "Group 1" };
-        context.LaboratoryGroups.Attach(group);
+        var group = new Laboratory { Code = "G1", Name = "Group 1" };
+        context.Laboratories.Attach(group);
         context.Entry(group).State = EntityState.Modified;
 
         Assert.Throws<OrganizationOwnershipException>(() => context.SaveChanges());
@@ -208,9 +208,9 @@ public sealed class OrganizationOwnershipPersistenceTests
     public void Deleted_owned_entity_with_conflicting_organization_is_rejected()
     {
         var context = CreateContext(new TestExecutionContext { OrganizationId = 7 });
-        var group = new LaboratoryGroup { Id = 123, OrganizationId = 8, Code = "G1", Name = "Group 1" };
-        context.LaboratoryGroups.Attach(group);
-        context.LaboratoryGroups.Remove(group);
+        var group = new Laboratory { Id = 123, OrganizationId = 8, Code = "G1", Name = "Group 1" };
+        context.Laboratories.Attach(group);
+        context.Laboratories.Remove(group);
 
         Assert.Throws<OrganizationOwnershipException>(() => context.SaveChanges());
     }
@@ -233,7 +233,6 @@ public sealed class OrganizationOwnershipPersistenceTests
     [InlineData(typeof(Organization), false)]
     [InlineData(typeof(Department), false)]
     [InlineData(typeof(Clinic), true)]
-    [InlineData(typeof(LaboratoryGroup), true)]
     [InlineData(typeof(Test), true)]
     [InlineData(typeof(BranchDepartment), true)]
     [InlineData(typeof(BranchTest), true)]

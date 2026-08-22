@@ -97,7 +97,13 @@ export class BranchesService {
 
   constructor(private readonly http: HttpClient) {}
 
-  list(search = '', clinicId?: number | null, page = 1, pageSize = 20): Observable<any> {
+  list(
+    search = '',
+    clinicId?: number | null,
+    page = 1,
+    pageSize = 20,
+    organizationId?: number | null,
+  ): Observable<any> {
     const params: Record<string, string> = {
       search,
       page: page.toString(),
@@ -106,6 +112,10 @@ export class BranchesService {
 
     if (clinicId != null) {
       params.clinicId = clinicId.toString();
+    }
+
+    if (organizationId != null) {
+      params.organizationId = organizationId.toString();
     }
 
     return this.http.get<any>(this.base, { params });

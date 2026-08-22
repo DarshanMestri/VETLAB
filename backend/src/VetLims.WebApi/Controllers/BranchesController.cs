@@ -13,15 +13,25 @@ namespace VetLims.WebApi.Controllers;
 public class BranchesController(VetLimsDbContext db, ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BranchDto>>> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<IEnumerable<BranchDto>>> List(
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] bool allOrganizations = false)
     {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
-        if (!organizationId.HasValue)
-            return Forbid();
+        int? organizationId = null;
+        if (!allOrganizations)
+        {
+            organizationId = await ResolveCurrentOrganizationIdAsync();
+            if (!organizationId.HasValue)
+                return Forbid();
+        }
 
         var q = db.Branches.AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted)
-            .AsQueryable();
+            .Where(x => (!allOrganizations || x.OrganizationId != null) && !x.IsDeleted);
+
+        if (organizationId.HasValue)
+            q = q.Where(x => x.OrganizationId == organizationId.Value);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -33,7 +43,7 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         var items = await q.OrderBy(x => x.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new BranchDto(x.Id, x.OrganizationId!.Value, x.Organization.Name, x.ClinicId, x.LaboratoryId, x.Code, x.Name, x.Address, x.Phone, x.Email, x.IsActive))
+            .Select(x => new BranchDto(x.Id, x.OrganizationId!.Value, x.Organization.Name, x.ClinicId, x.LaboratoryId, x.Code, x.Name, x.Address, x.Phone, x.Email, x.IsActive, x.Clinic.Name, x.Laboratory.Name))
             .ToListAsync();
 
         return Ok(new { total, page, pageSize, items });
@@ -48,10 +58,12 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
 
         var item = await db.Branches.AsNoTracking()
             .Include(x => x.Organization)
+            .Include(x => x.Clinic)
+            .Include(x => x.Laboratory)
             .FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
-        return Ok(new BranchDto(item.Id, item.OrganizationId!.Value, item.Organization?.Name, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
+        return Ok(new BranchDto(item.Id, item.OrganizationId!.Value, item.Organization?.Name, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive, item.Clinic?.Name, item.Laboratory?.Name));
     }
 
     [HttpPost]
@@ -78,6 +90,20 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         if (await db.Branches.AnyAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
             return Conflict("Branch code already exists in this organization.");
 
+        var clinicConflict = await db.Branches.AsNoTracking()
+            .Where(x => x.ClinicId == dto.ClinicId && !x.IsDeleted)
+            .Select(x => new { x.Name })
+            .FirstOrDefaultAsync();
+        if (clinicConflict != null)
+            return Conflict($"Clinic '{clinic.Name}' is already mapped to branch '{clinicConflict.Name}'. Delete that branch first.");
+
+        var laboratoryConflict = await db.Branches.AsNoTracking()
+            .Where(x => x.LaboratoryId == dto.LaboratoryId && !x.IsDeleted)
+            .Select(x => new { x.Name })
+            .FirstOrDefaultAsync();
+        if (laboratoryConflict != null)
+            return Conflict($"Laboratory '{laboratory.Name}' is already mapped to branch '{laboratoryConflict.Name}'. Delete that branch first.");
+
         var item = new Branch
         {
             OrganizationId = organizationId.Value,
@@ -92,14 +118,14 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         };
 
         db.Branches.Add(item);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsSystemAsync(organizationId.Value);
 
         var organizationName = await db.Organizations.AsNoTracking()
             .Where(x => x.Id == organizationId.Value)
             .Select(x => x.Name)
             .FirstOrDefaultAsync();
 
-        return CreatedAtAction(nameof(Get), new { id = item.Id }, new BranchDto(item.Id, item.OrganizationId!.Value, organizationName, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
+        return CreatedAtAction(nameof(Get), new { id = item.Id }, new BranchDto(item.Id, item.OrganizationId!.Value, organizationName, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive, clinic.Name, laboratory.Name));
     }
 
     [HttpPut("{id:int}")]
@@ -134,6 +160,20 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         if (await db.Branches.AnyAsync(x => x.Id != id && x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
             return Conflict("Branch code already exists in this organization.");
 
+        var clinicConflict = await db.Branches.AsNoTracking()
+            .Where(x => x.Id != id && x.ClinicId == dto.ClinicId && !x.IsDeleted)
+            .Select(x => new { x.Name })
+            .FirstOrDefaultAsync();
+        if (clinicConflict != null)
+            return Conflict($"Clinic '{targetClinic.Name}' is already mapped to branch '{clinicConflict.Name}'. Delete that branch first.");
+
+        var laboratoryConflict = await db.Branches.AsNoTracking()
+            .Where(x => x.Id != id && x.LaboratoryId == dto.LaboratoryId && !x.IsDeleted)
+            .Select(x => new { x.Name })
+            .FirstOrDefaultAsync();
+        if (laboratoryConflict != null)
+            return Conflict($"Laboratory '{targetLaboratory.Name}' is already mapped to branch '{laboratoryConflict.Name}'. Delete that branch first.");
+
         item.OrganizationId = organizationId.Value;
         item.ClinicId = dto.ClinicId;
         item.LaboratoryId = dto.LaboratoryId;
@@ -144,14 +184,14 @@ public class BranchesController(VetLimsDbContext db, ICurrentUserService current
         item.Email = dto.Email?.Trim();
         item.IsActive = dto.IsActive;
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsSystemAsync(organizationId.Value);
 
         var organizationName = await db.Organizations.AsNoTracking()
             .Where(x => x.Id == organizationId.Value)
             .Select(x => x.Name)
             .FirstOrDefaultAsync();
 
-        return Ok(new BranchDto(item.Id, organizationId.Value, organizationName, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive));
+        return Ok(new BranchDto(item.Id, organizationId.Value, organizationName, item.ClinicId, item.LaboratoryId, item.Code, item.Name, item.Address, item.Phone, item.Email, item.IsActive, targetClinic.Name, targetLaboratory.Name));
     }
 
     [HttpPatch("{id:int}/status")]

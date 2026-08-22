@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ClinicsService, ClinicListItem } from './clinics.service';
+import { BranchesService, OrganizationOption } from '../branches/branches.service';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-clinics-list',
@@ -30,6 +32,7 @@ import { ClinicsService, ClinicListItem } from './clinics.service';
           <tr>
             <th>Code</th>
             <th>Name</th>
+            <th>Organization</th>
             <th>Phone</th>
             <th>Email</th>
             <th>Status</th>
@@ -41,6 +44,7 @@ import { ClinicsService, ClinicListItem } from './clinics.service';
             <tr>
               <td>{{item.code}}</td>
               <td>{{item.name}}</td>
+              <td>{{item.organizationName || '-'}}</td>
               <td>{{item.phone || '-'}}</td>
               <td>{{item.email || '-'}}</td>
               <td>
@@ -56,7 +60,7 @@ import { ClinicsService, ClinicListItem } from './clinics.service';
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="6" class="text-center text-muted">No clinics found.</td></tr>
+            <tr><td colspan="7" class="text-center text-muted">No clinics found.</td></tr>
           }
         </tbody>
       </table>
@@ -84,6 +88,21 @@ import { ClinicsService, ClinicListItem } from './clinics.service';
                 <button type="button" class="btn-close" (click)="showForm = false"></button>
               </div>
               <div class="modal-body">
+                @if (error) {
+                  <div class="alert alert-danger py-2">{{error}}</div>
+                }
+                <div class="mb-3">
+                  <label class="form-label">Organization <span class="text-danger">*</span></label>
+                  <select class="form-select" [(ngModel)]="form.organizationId" name="organizationId" [disabled]="editing" required>
+                    <option [ngValue]="null">Select Organization</option>
+                    @for(o of organizations; track o.id) {
+                      <option [ngValue]="o.id">{{o.name}}</option>
+                    }
+                  </select>
+                  @if (editing) {
+                    <div class="form-text">Organization cannot be changed after creation.</div>
+                  }
+                </div>
                 <div class="mb-3">
                   <label class="form-label">Code <span class="text-danger">*</span></label>
                   <input class="form-control" [(ngModel)]="form.code" required>
@@ -115,7 +134,7 @@ import { ClinicsService, ClinicListItem } from './clinics.service';
               </div>
               <div class="modal-footer">
                 <button class="btn btn-secondary" (click)="showForm = false">Cancel</button>
-                <button class="btn btn-primary" (click)="save()" [disabled]="!form.code || !form.name">{{editing ? 'Update' : 'Create'}}</button>
+                <button class="btn btn-primary" (click)="save()" [disabled]="!form.code || !form.name || (!editing && !form.organizationId)">{{editing ? 'Update' : 'Create'}}</button>
               </div>
             </div>
           </div>
@@ -133,18 +152,46 @@ export class ClinicsListComponent implements OnInit {
   showForm = false;
   editing = false;
   editingId = 0;
-  form = { code: '', name: '', shortName: '', phone: '', email: '', address: '', isActive: true };
+  organizations: OrganizationOption[] = [];
+  private defaultOrganizationId: number | null = null;
+  error = '';
+  form = this.emptyForm();
 
-  constructor(private svc: ClinicsService) {}
+  constructor(
+    private svc: ClinicsService,
+    private branchesSvc: BranchesService,
+    private auth: AuthService,
+  ) {}
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.loadOrganizations();
+    this.load();
+  }
 
   get totalPages() { return Math.max(1, Math.ceil(this.total / this.pageSize)); }
 
+  loadOrganizations() {
+    this.branchesSvc.listOrganizations().subscribe({
+      next: (items) => {
+        this.organizations = items ?? [];
+        const payloadOrgId = this.auth.getJwtPayload()?.organization_id;
+        this.defaultOrganizationId =
+          this.auth.getSelectedOrganizationId() ??
+          (typeof payloadOrgId === 'number' ? payloadOrgId : null);
+        if (!this.editing && !this.form.organizationId) {
+          this.form = { ...this.form, organizationId: this.defaultOrganizationId };
+        }
+      },
+      error: () => {
+        this.organizations = [];
+      },
+    });
+  }
+
   load() {
     this.svc.list({ search: this.search, page: this.page, pageSize: this.pageSize }).subscribe(r => {
-      this.items = r.items;
-      this.total = r.total;
+      this.items = r.items ?? [];
+      this.total = r.total ?? 0;
     });
   }
 
@@ -152,24 +199,78 @@ export class ClinicsListComponent implements OnInit {
 
   openCreate() {
     this.editing = false;
-    this.form = { code: '', name: '', shortName: '', phone: '', email: '', address: '', isActive: true };
+    this.editingId = 0;
+    this.form = this.emptyForm();
+    if (this.defaultOrganizationId != null) {
+      this.form = { ...this.form, organizationId: this.defaultOrganizationId };
+    }
+    this.error = '';
     this.showForm = true;
   }
 
   openEdit(item: ClinicListItem) {
     this.editing = true;
     this.editingId = item.id;
-    this.form = { code: item.code, name: item.name, shortName: item.shortName || '', phone: item.phone || '', email: item.email || '', address: item.address || '', isActive: item.isActive };
+    this.form = {
+      organizationId: item.organizationId,
+      code: item.code,
+      name: item.name,
+      shortName: item.shortName || '',
+      phone: item.phone || '',
+      email: item.email || '',
+      address: item.address || '',
+      isActive: item.isActive,
+    };
+    this.error = '';
     this.showForm = true;
   }
 
   save() {
-    const req = { ...this.form };
+    const isCreate = !this.editing;
+    if (isCreate && !this.form.organizationId) {
+      this.error = 'Select an organization for this clinic.';
+      return;
+    }
+    const req: any = {
+      code: (this.form.code || '').trim(),
+      name: (this.form.name || '').trim(),
+      shortName: this.form.shortName,
+      phone: this.form.phone,
+      email: this.form.email,
+      address: this.form.address,
+      isActive: this.form.isActive,
+    };
+    if (isCreate) req.organizationId = this.form.organizationId;
+
     const op = this.editing ? this.svc.update(this.editingId, req) : this.svc.create(req);
-    op.subscribe(() => { this.showForm = false; this.load(); });
+    op.subscribe({
+      next: () => { this.showForm = false; this.load(); },
+      error: (err) => { this.error = this.extractMessage(err); },
+    });
   }
 
   toggleStatus(item: ClinicListItem) {
     this.svc.toggleStatus(item.id, !item.isActive).subscribe(() => this.load());
+  }
+
+  emptyForm() {
+    return {
+      organizationId: null as number | null,
+      code: '',
+      name: '',
+      shortName: '',
+      phone: '',
+      email: '',
+      address: '',
+      isActive: true,
+    };
+  }
+
+  extractMessage(err: any): string {
+    const payload = err?.error;
+    if (typeof payload === 'string') return payload;
+    if (payload?.message) return payload.message;
+    if (payload?.title) return payload.title;
+    return 'Request failed';
   }
 }

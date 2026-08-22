@@ -47,6 +47,8 @@ namespace VetLims.WebApi.Controllers
         public record AuthorizedBranchDto(
             int Id,
             string Name,
+            int OrganizationId,
+            string OrganizationName,
             string LaboratoryName,
             string ClinicName,
             bool IsDefault,
@@ -126,7 +128,6 @@ namespace VetLims.WebApi.Controllers
             var auth = await ResolveAuthenticatedUserAsync();
             if (!auth.IsSuccess) return auth.Error!;
             var user = auth.User!;
-            var organization = auth.Organization!;
             var roles = auth.Roles!;
 
             var branch = await _db.Branches.AsNoTracking()
@@ -134,8 +135,8 @@ namespace VetLims.WebApi.Controllers
                 .Include(b => b.Laboratory)
                 .FirstOrDefaultAsync(b => b.Id == req.BranchId && b.IsActive && !b.IsDeleted);
 
-            if (branch == null || branch.OrganizationId != organization.Id)
-                return Forbidden("Selected branch is invalid for your organization.");
+            if (branch == null || !branch.OrganizationId.HasValue)
+                return Forbidden("Selected branch is invalid.");
 
             var isAdmin = IsAdmin(roles);
             bool clinicAccess;
@@ -143,6 +144,11 @@ namespace VetLims.WebApi.Controllers
 
             if (isAdmin)
             {
+                // Admins implicitly cover their HOME organization only; explicit
+                // cross-org grants are a feature of non-admin roles.
+                if (branch.OrganizationId != user.OrganizationId)
+                    return Forbidden("Selected branch is outside your home organization.");
+
                 clinicAccess = true;
                 laboratoryAccess = true;
             }
@@ -163,20 +169,29 @@ namespace VetLims.WebApi.Controllers
                 laboratoryAccess = location.HasLaboratoryAccess;
             }
 
+            // The working organization follows the selected branch, which lets a
+            // non-admin hold access across several organizations.
+            var targetOrganization = await _db.Organizations.AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == branch.OrganizationId.Value && o.IsActive && !o.IsDeleted);
+            if (targetOrganization == null)
+                return Forbidden("The branch's organization is inactive.");
+
             var assignedBranchIds = await LoadAuthorizedBranchIdsAsync(user, roles);
 
             var token = CreateToken(
-                user.Id, user.UserName ?? "", user.DisplayName, organization, roles,
+                user.Id, user.UserName ?? "", user.DisplayName, targetOrganization, roles,
                 branch: branch, clinicAccess: clinicAccess, laboratoryAccess: laboratoryAccess,
                 assignedBranchIds: assignedBranchIds);
 
             return Ok(new SelectBranchResponse(
                 token,
-                organization.Id,
-                organization.Name,
+                targetOrganization.Id,
+                targetOrganization.Name,
                 new AuthorizedBranchDto(
                     branch.Id,
                     branch.Name,
+                    targetOrganization.Id,
+                    targetOrganization.Name ?? string.Empty,
                     branch.Laboratory?.Name ?? string.Empty,
                     branch.Clinic?.Name ?? string.Empty,
                     IsDefault: false,
@@ -250,26 +265,33 @@ namespace VetLims.WebApi.Controllers
             if (!user.OrganizationId.HasValue) return new List<AuthorizedBranchDto>();
             var orgId = user.OrganizationId.Value;
 
-            var branchQuery = _db.Branches.AsNoTracking()
-                .Where(b => b.IsActive && !b.IsDeleted && b.OrganizationId == orgId);
+            var homeOrganization = await ResolveUserOrganizationAsync(user);
+            var homeOrganizationName = homeOrganization?.Name ?? string.Empty;
 
             if (IsAdmin(roles))
             {
-                return await branchQuery
+                // Admins implicitly cover every active branch of their HOME organization.
+                return await _db.Branches.AsNoTracking()
+                    .Where(b => b.IsActive && !b.IsDeleted && b.OrganizationId == orgId)
                     .OrderBy(b => b.Name)
                     .Select(b => new AuthorizedBranchDto(
-                        b.Id, b.Name, b.Laboratory.Name, b.Clinic.Name,
+                        b.Id, b.Name, orgId, homeOrganizationName, b.Laboratory.Name, b.Clinic.Name,
                         false, true, true))
                     .ToListAsync();
             }
 
+            // Non-admins hold explicit grants which may span multiple organizations.
             return await (
                 from ul in _db.UserLocations.AsNoTracking()
-                join b in branchQuery on ul.BranchId equals b.Id
-                where ul.UserId == user.Id && ul.IsActive && !ul.IsDeleted
-                orderby ul.IsDefault descending, b.Name
+                join b in _db.Branches.AsNoTracking() on ul.BranchId equals b.Id
+                where ul.UserId == user.Id
+                      && ul.IsActive && !ul.IsDeleted
+                      && b.IsActive && !b.IsDeleted
+                      && b.OrganizationId != null
+                orderby b.OrganizationId, ul.IsDefault descending, b.Name
                 select new AuthorizedBranchDto(
-                    b.Id, b.Name, b.Laboratory.Name, b.Clinic.Name,
+                    b.Id, b.Name, b.OrganizationId!.Value, b.Organization.Name,
+                    b.Laboratory.Name, b.Clinic.Name,
                     ul.IsDefault, ul.HasClinicAccess, ul.HasLaboratoryAccess))
                 .ToListAsync();
         }
@@ -291,7 +313,7 @@ namespace VetLims.WebApi.Controllers
                 from ul in _db.UserLocations.AsNoTracking()
                 join b in _db.Branches.AsNoTracking() on ul.BranchId equals b.Id
                 where ul.UserId == user.Id && ul.IsActive && !ul.IsDeleted
-                      && b.IsActive && !b.IsDeleted && b.OrganizationId == orgId
+                      && b.IsActive && !b.IsDeleted
                 select ul.BranchId)
                 .Distinct()
                 .ToListAsync();

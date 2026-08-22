@@ -42,10 +42,16 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         var items = await q.OrderBy(x => x.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new LaboratoryDto(x.Id, x.OrganizationId!.Value, x.LaboratoryGroupId, x.Code, x.Name, x.Logo, x.Address, x.Phone, x.Email, x.Gst, x.RegistrationNumber, x.WhatsAppNumber, x.ReportHeader, x.ReportFooter, x.DigitalSignature, x.IsActive))
+            .Select(x => new { x.Id, x.OrganizationId, x.Code, x.Name, x.Logo, x.Address, x.Phone, x.Email, x.Gst, x.RegistrationNumber, x.WhatsAppNumber, x.ReportHeader, x.ReportFooter, x.DigitalSignature, x.IsActive, OrganizationName = db.Organizations.Where(o => o.Id == x.OrganizationId).Select(o => (string?)o.Name).FirstOrDefault() })
             .ToListAsync();
 
-        return Ok(new { total, page, pageSize, items });
+        return Ok(new
+        {
+            total,
+            page,
+            pageSize,
+            items = items.Select(x => new LaboratoryDto(x.Id, x.OrganizationId!.Value, x.OrganizationName, x.Code, x.Name, x.Logo, x.Address, x.Phone, x.Email, x.Gst, x.RegistrationNumber, x.WhatsAppNumber, x.ReportHeader, x.ReportFooter, x.DigitalSignature, x.IsActive))
+        });
     }
 
     [HttpGet("{id:int}")]
@@ -58,13 +64,15 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         var item = await db.Laboratories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId.Value && !x.IsDeleted);
         if (item is null) return NotFound();
 
-        return Ok(new LaboratoryDto(item.Id, item.OrganizationId!.Value, item.LaboratoryGroupId, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
+        return Ok(ToDto(item));
     }
 
     [HttpPost]
     public async Task<ActionResult<LaboratoryDto>> Create([FromBody] LaboratoryCreateDto dto)
     {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
+        // The caller may place the new laboratory under any active organization
+        // (defaults to their own home organization when omitted).
+        var organizationId = await ResolveTargetOrganizationIdAsync(dto.OrganizationId);
         if (!organizationId.HasValue)
             return Forbid();
 
@@ -74,13 +82,9 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         if (await db.Laboratories.AnyAsync(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
             return Conflict("Laboratory code already exists in this organization.");
 
-        if (dto.LaboratoryGroupId.HasValue && !await IsValidLaboratoryGroupAsync(dto.LaboratoryGroupId.Value, organizationId.Value))
-            return BadRequest("Selected laboratory group is invalid for this organization.");
-
         var item = new Laboratory
         {
             OrganizationId = organizationId.Value,
-            LaboratoryGroupId = dto.LaboratoryGroupId,
             Code = dto.Code.Trim(),
             Name = dto.Name.Trim(),
             Logo = dto.Logo?.Trim(),
@@ -97,9 +101,9 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         };
 
         db.Laboratories.Add(item);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsSystemAsync(organizationId.Value);
 
-        return CreatedAtAction(nameof(Get), new { id = item.Id }, new LaboratoryDto(item.Id, item.OrganizationId!.Value, item.LaboratoryGroupId, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
+        return CreatedAtAction(nameof(Get), new { id = item.Id }, ToDto(item));
     }
 
     [HttpPut("{id:int}")]
@@ -118,10 +122,6 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         if (await db.Laboratories.AnyAsync(x => x.Id != id && x.OrganizationId == organizationId.Value && !x.IsDeleted && EF.Functions.ILike(x.Code, dto.Code.Trim())))
             return Conflict("Laboratory code already exists in this organization.");
 
-        if (dto.LaboratoryGroupId.HasValue && !await IsValidLaboratoryGroupAsync(dto.LaboratoryGroupId.Value, organizationId.Value))
-            return BadRequest("Selected laboratory group is invalid for this organization.");
-
-        item.LaboratoryGroupId = dto.LaboratoryGroupId;
         item.Code = dto.Code.Trim();
         item.Name = dto.Name.Trim();
         item.Logo = dto.Logo?.Trim();
@@ -137,7 +137,7 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         item.IsActive = dto.IsActive;
 
         await db.SaveChangesAsync();
-        return Ok(new LaboratoryDto(item.Id, item.OrganizationId!.Value, item.LaboratoryGroupId, item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive));
+        return Ok(ToDto(item));
     }
 
     [HttpPatch("{id:int}/status")]
@@ -154,6 +154,11 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
         return NoContent();
     }
 
+    private LaboratoryDto ToDto(Laboratory item) =>
+        new(item.Id, item.OrganizationId!.Value,
+            db.Organizations.AsNoTracking().Where(o => o.Id == item.OrganizationId!.Value).Select(o => (string?)o.Name).FirstOrDefault() ?? string.Empty,
+            item.Code, item.Name, item.Logo, item.Address, item.Phone, item.Email, item.Gst, item.RegistrationNumber, item.WhatsAppNumber, item.ReportHeader, item.ReportFooter, item.DigitalSignature, item.IsActive);
+
     private Task<int?> ResolveCurrentOrganizationIdAsync()
     {
         var orgId = currentUserService.OrganizationId;
@@ -166,9 +171,13 @@ public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService cur
             .FirstOrDefaultAsync();
     }
 
-    private Task<bool> IsValidLaboratoryGroupAsync(int groupId, int organizationId)
+    private async Task<int?> ResolveTargetOrganizationIdAsync(int? requestedOrganizationId)
     {
-        return db.LaboratoryGroups.AsNoTracking()
-            .AnyAsync(x => x.Id == groupId && x.OrganizationId == organizationId && !x.IsDeleted && x.IsActive);
+        if (!requestedOrganizationId.HasValue)
+            return await ResolveCurrentOrganizationIdAsync();
+
+        var exists = await db.Organizations.AsNoTracking()
+            .AnyAsync(x => x.Id == requestedOrganizationId.Value && !x.IsDeleted && x.IsActive);
+        return exists ? requestedOrganizationId : null;
     }
 }

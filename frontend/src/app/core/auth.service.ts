@@ -18,6 +18,8 @@ export interface LoginStartResponse {
 export interface BranchOption {
   id: number;
   name: string;
+  organizationId?: number;
+  organizationName?: string | null;
   code: string | null;
   hasClinicAccess: boolean;
   hasLaboratoryAccess: boolean;

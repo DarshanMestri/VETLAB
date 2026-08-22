@@ -13,6 +13,8 @@ import {
 
 interface EditRow {
   branchId: number;
+  organizationId: number;
+  organizationName: string;
   name: string;
   code: string | null;
   laboratoryName: string;
@@ -21,6 +23,12 @@ interface EditRow {
   clinic: boolean;
   lab: boolean;
   isDefault: boolean;
+}
+
+interface OrgGroup {
+  id: number;
+  name: string;
+  rows: EditRow[];
 }
 
 @Component({
@@ -32,84 +40,122 @@ interface EditRow {
       <div class="ua-dialog" (click)="$event.stopPropagation()">
         <header class="ua-header">
           <div>
-            <h3>Branch access</h3>
+            <h3>Branch &amp; Organization Access</h3>
             <p>{{ user().displayName || user().userName }} · {{ user().roles.join(', ') }}</p>
           </div>
           <button type="button" class="ua-close" (click)="close()" aria-label="Close">&times;</button>
         </header>
 
         <div *ngIf="isAdmin()" class="alert alert-info ua-note">
-          Administrator accounts implicitly hold every active branch of their organization. No explicit grants are
-          needed.
+          Administrator accounts implicitly hold every active branch of their home organization. Explicit grants are
+          only used for non-admin roles.
         </div>
 
         <div *ngIf="error()" class="alert alert-danger ua-note">{{ error() }}</div>
 
+        <div class="ua-toolbar">
+          <input
+            class="form-control form-control-sm"
+            type="search"
+            placeholder="Search organization or branch…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+          />
+          <span class="ua-count">
+            {{ grantedCount() }} of {{ rows().length }} branches granted
+          </span>
+        </div>
+
         <div class="ua-body">
-          <table class="table table-sm align-middle" *ngIf="!loading(); else loadingTpl">
-            <thead>
-              <tr>
-                <th style="width:70px">Access</th>
-                <th>Branch</th>
-                <th class="text-center" style="width:80px">Clinic</th>
-                <th class="text-center" style="width:105px">Laboratory</th>
-                <th class="text-center" style="width:85px">Default</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of rows(); track row.branchId) {
-                <tr [class.row-disabled]="!row.included && !isAdmin()">
-                  <td class="text-center">
-                    <input
-                      type="checkbox"
-                      class="form-check-input"
-                      [disabled]="locked()"
-                      [(ngModel)]="row.included"
-                      (ngModelChange)="onIncludedChange(row)"
-                    />
-                  </td>
-                  <td>
-                    <strong>{{ row.name }}</strong>
-                    <small>{{ row.code ? row.code + ' · ' : '' }}{{ row.laboratoryName || row.clinicName }}</small>
-                  </td>
-                  <td class="text-center">
-                    <input
-                      type="checkbox"
-                      class="form-check-input"
-                      [disabled]="locked() || !row.included"
-                      [(ngModel)]="row.clinic"
-                      (ngModelChange)="clearDefaultIfUngrouped(row)"
-                    />
-                  </td>
-                  <td class="text-center">
-                    <input
-                      type="checkbox"
-                      class="form-check-input"
-                      [disabled]="locked() || !row.included"
-                      [(ngModel)]="row.lab"
-                      (ngModelChange)="clearDefaultIfUngrouped(row)"
-                    />
-                  </td>
-                  <td class="text-center">
-                    <input
-                      type="radio"
-                      class="form-check-input"
-                      name="default-branch"
-                      [disabled]="locked() || !row.included"
-                      [ngModel]="defaultBranchId()"
-                      [value]="row.branchId"
-                      (ngModelChange)="setDefault(row.branchId)"
-                    />
-                  </td>
-                </tr>
-              }
-              @empty {
-                <tr>
-                  <td colspan="5" class="text-center text-muted py-4">No active branches in your organization.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <ng-container *ngIf="!loading(); else loadingTpl">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th style="width:64px">Access</th>
+                    <th>Branch</th>
+                    <th class="text-center" style="width:70px">Clinic</th>
+                    <th class="text-center" style="width:90px">Laboratory</th>
+                    <th class="text-center" style="width:80px">Default</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (group of groups(); track group.id) {
+                    <tr class="org-row">
+                      <td class="text-center">
+                        <input
+                          type="checkbox"
+                          class="form-check-input"
+                          title="Select all branches of this organization"
+                          [disabled]="locked()"
+                          [checked]="isOrgFullySelected(group)"
+                          (change)="toggleOrg(group, $any($event.target).checked)"
+                        />
+                      </td>
+                      <td colspan="4">
+                        <strong>{{ group.name }}</strong>
+                        <small>{{ selectedIn(group) }}/{{ group.rows.length }} granted</small>
+                      </td>
+                    </tr>
+                    @for (row of group.rows; track row.branchId) {
+                      <tr [class.row-disabled]="!row.included && !isAdmin()">
+                        <td class="text-center">
+                          <input
+                            type="checkbox"
+                            class="form-check-input"
+                            [disabled]="locked()"
+                            [(ngModel)]="row.included"
+                            (ngModelChange)="onIncludedChange(row)"
+                          />
+                        </td>
+                        <td>
+                          <strong>{{ row.name }}</strong>
+                          <small>
+                            {{ row.code ? row.code + ' · ' : '' }}
+                            {{ row.laboratoryName || row.clinicName || 'No clinic/laboratory mapped' }}
+                          </small>
+                        </td>
+                        <td class="text-center">
+                          <input
+                            type="checkbox"
+                            class="form-check-input"
+                            [disabled]="locked() || !row.included"
+                            [(ngModel)]="row.clinic"
+                            (ngModelChange)="clearDefaultIfUngrouped(row)"
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            type="checkbox"
+                            class="form-check-input"
+                            [disabled]="locked() || !row.included"
+                            [(ngModel)]="row.lab"
+                            (ngModelChange)="clearDefaultIfUngrouped(row)"
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            type="radio"
+                            class="form-check-input"
+                            name="default-branch"
+                            [disabled]="locked() || !row.included"
+                            [ngModel]="defaultBranchId()"
+                            [value]="row.branchId"
+                            (ngModelChange)="setDefault(row.branchId)"
+                          />
+                        </td>
+                      </tr>
+                    }
+                  }
+                  @empty {
+                    <tr>
+                      <td colspan="5" class="text-center text-muted py-4">No active branches found.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
           <ng-template #loadingTpl>
             <div class="text-center text-muted py-4">Loading…</div>
           </ng-template>
@@ -125,7 +171,7 @@ interface EditRow {
               (click)="save()"
               [disabled]="locked() || saving() || loading()"
             >
-              {{ saving() ? 'Saving…' : 'Save Access' }}
+              {{ saving() ? 'Saving…' : 'Save Access (' + grantedCount() + ')' }}
             </button>
           </div>
         </footer>
@@ -144,7 +190,7 @@ interface EditRow {
         padding: 1rem;
       }
       .ua-dialog {
-        width: min(640px, 100%);
+        width: min(760px, 100%);
         max-height: 85vh;
         display: flex;
         flex-direction: column;
@@ -185,6 +231,17 @@ interface EditRow {
         margin: 0.75rem 1.15rem 0;
         font-size: 0.8rem;
       }
+      .ua-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1.15rem 0;
+      }
+      .ua-count {
+        white-space: nowrap;
+        font-size: 0.75rem;
+        color: #74808c;
+      }
       .ua-body {
         overflow-y: auto;
         padding: 0.75rem 1.15rem;
@@ -199,6 +256,21 @@ interface EditRow {
         display: block;
         font-size: 0.72rem;
         color: #7a8793;
+      }
+      tr.org-row td {
+        background: #f4f6f8;
+        position: sticky;
+        top: 0;
+      }
+      tr.org-row td strong {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #51606d;
+      }
+      tr.org-row td small {
+        margin-left: 0.5rem;
+        display: inline;
       }
       .row-disabled td {
         opacity: 0.55;
@@ -242,6 +314,7 @@ export class UserAccessDialogComponent {
   readonly saving = signal(false);
   readonly error = signal('');
   readonly defaultBranchId = signal<number | null>(null);
+  readonly search = signal('');
 
   constructor() {
     this.load();
@@ -257,6 +330,52 @@ export class UserAccessDialogComponent {
 
   close(): void {
     if (!this.saving()) this.closed.emit();
+  }
+
+  /** Rows grouped by organization, honoring the search filter. */
+  groups(): OrgGroup[] {
+    const term = this.search().trim().toLowerCase();
+    const visible = term
+      ? this.rows().filter((r) =>
+          `${r.organizationName} ${r.name} ${r.code ?? ''}`.toLowerCase().includes(term),
+        )
+      : this.rows();
+
+    const map = new Map<number, OrgGroup>();
+    for (const r of visible) {
+      let g = map.get(r.organizationId);
+      if (!g) {
+        g = {
+          id: r.organizationId,
+          name: r.organizationName || `Organization #${r.organizationId}`,
+          rows: [],
+        };
+        map.set(r.organizationId, g);
+      }
+      g.rows.push(r);
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  grantedCount(): number {
+    return this.rows().filter((r) => r.included).length;
+  }
+
+  selectedIn(group: OrgGroup): number {
+    return group.rows.filter((r) => r.included).length;
+  }
+
+  isOrgFullySelected(group: OrgGroup): boolean {
+    return group.rows.length > 0 && group.rows.every((r) => r.included);
+  }
+
+  toggleOrg(group: OrgGroup, checked: boolean): void {
+    for (const row of [...group.rows]) {
+      if (row.included !== checked) {
+        row.included = checked;
+        this.onIncludedChange(row);
+      }
+    }
   }
 
   onIncludedChange(row: EditRow): void {
@@ -299,13 +418,18 @@ export class UserAccessDialogComponent {
       },
       error: (err) => {
         this.saving.set(false);
-        this.error.set(
-          err?.error?.detail ||
-            err?.error?.title ||
-            (typeof err?.error === 'string' ? err.error : 'Unable to save branch access.'),
-        );
+        this.error.set(this.extractError(err, 'Unable to save branch access.'));
       },
     });
+  }
+
+  private extractError(err: any, fallback: string): string {
+    const body = err?.error;
+    if (typeof body === 'string' && body.trim()) return body;
+    if (body?.message) return body.message;
+    if (body?.detail) return body.detail;
+    if (body?.title) return body.title;
+    return fallback;
   }
 
   private load(): void {
@@ -325,10 +449,12 @@ export class UserAccessDialogComponent {
       const included = !!loc?.isActive;
       return {
         branchId: b.id,
+        organizationId: b.organizationId,
+        organizationName: b.organizationName ?? '',
         name: b.name,
         code: b.code,
-        laboratoryName: loc?.laboratoryName ?? '',
-        clinicName: loc?.clinicName ?? '',
+        laboratoryName: b.laboratoryName || loc?.laboratoryName || '',
+        clinicName: b.clinicName || loc?.clinicName || '',
         included,
         clinic: included && (loc?.hasClinicAccess ?? false),
         lab: included && (loc?.hasLaboratoryAccess ?? false),

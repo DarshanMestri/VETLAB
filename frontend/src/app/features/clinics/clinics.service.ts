@@ -5,6 +5,7 @@ import { Observable, map } from 'rxjs';
 export interface ClinicListItem {
   id: number;
   organizationId: number;
+  organizationName?: string | null;
   code: string;
   name: string;
   shortName?: string;
@@ -19,6 +20,7 @@ export interface ClinicListItem {
 export interface ClinicCreateRequest {
   code: string;
   name: string;
+  organizationId?: number;
   shortName?: string;
   phone?: string;
   email?: string;

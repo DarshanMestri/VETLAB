@@ -1,11 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable } from 'rxjs';
 
 export interface LaboratoryListItem {
   id: number;
   organizationId: number;
-  laboratoryGroupId?: number | null;
+  organizationName?: string | null;
   code: string;
   name: string;
   logo?: string | null;
@@ -21,16 +21,10 @@ export interface LaboratoryListItem {
   isActive: boolean;
 }
 
-export interface LaboratoryGroupOption {
-  id: number;
-  code: string;
-  name: string;
-}
-
 export interface LaboratoryCreateRequest {
   code: string;
   name: string;
-  laboratoryGroupId?: number | null;
+  organizationId?: number;
   logo?: string | null;
   address?: string | null;
   phone?: string | null;
@@ -72,13 +66,5 @@ export class LaboratoriesService {
 
   toggleStatus(id: number, isActive: boolean): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/status`, isActive);
-  }
-
-  getGroups(): Observable<LaboratoryGroupOption[]> {
-    return this.http
-      .get<any>('/api/laboratory-groups', {
-        params: { page: '1', pageSize: '100' },
-      })
-      .pipe(map((res: any) => (res?.items ?? []) as LaboratoryGroupOption[]));
   }
 }

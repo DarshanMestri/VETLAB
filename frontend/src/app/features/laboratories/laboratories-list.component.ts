@@ -3,9 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   LaboratoriesService,
-  LaboratoryGroupOption,
   LaboratoryListItem,
 } from './laboratories.service';
+import { BranchesService, OrganizationOption } from '../branches/branches.service';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-laboratories-list',
@@ -38,7 +39,7 @@ import {
           <tr>
             <th>Code</th>
             <th>Name</th>
-            <th>Group</th>
+            <th>Organization</th>
             <th>Address</th>
             <th>Phone</th>
             <th>Email</th>
@@ -50,7 +51,7 @@ import {
           <tr *ngFor="let row of rows()">
             <td>{{ row.code }}</td>
             <td>{{ row.name }}</td>
-            <td>{{ getGroupName(row.laboratoryGroupId) }}</td>
+            <td>{{ row.organizationName || '—' }}</td>
             <td>{{ row.address || '—' }}</td>
             <td>{{ row.phone || '—' }}</td>
             <td>{{ row.email || '—' }}</td>
@@ -86,22 +87,33 @@ import {
       <div class="card-body">
         <form #labForm="ngForm" (ngSubmit)="save(labForm.valid ?? false)" novalidate>
           <div class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-4">
+              <label class="form-label">Organization <span class="text-danger">*</span></label>
+              <select
+                class="form-select"
+                name="organizationId"
+                [(ngModel)]="form.organizationId"
+                [disabled]="editingId() !== null"
+                required
+              >
+                <option [ngValue]="null">Select Organization</option>
+                @for (o of organizations; track o.id) {
+                  <option [ngValue]="o.id">{{ o.name }}</option>
+                }
+              </select>
+              @if (editingId() !== null) {
+                <div class="form-text">Organization cannot be changed after creation.</div>
+              }
+            </div>
+            <div class="col-md-2">
               <label class="form-label">Code *</label>
               <input class="form-control" name="code" [(ngModel)]="form.code" maxlength="100" required #code="ngModel" />
               <div class="invalid-feedback d-block" *ngIf="code.invalid && code.touched">Code is required.</div>
             </div>
-            <div class="col-md-5">
+            <div class="col-md-4">
               <label class="form-label">Name *</label>
               <input class="form-control" name="name" [(ngModel)]="form.name" maxlength="200" required #name="ngModel" />
               <div class="invalid-feedback d-block" *ngIf="name.invalid && name.touched">Name is required.</div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label">Laboratory Group</label>
-              <select class="form-select" name="laboratoryGroupId" [(ngModel)]="form.laboratoryGroupId">
-                <option [ngValue]="null">No group</option>
-                <option *ngFor="let group of groups" [ngValue]="group.id">{{ group.name }} ({{ group.code }})</option>
-              </select>
             </div>
             <div class="col-md-2">
               <label class="form-label">Status</label>
@@ -122,8 +134,7 @@ import {
 
             <div class="col-md-6">
               <label class="form-label">Email</label>
-              <input class="form-control" type="email" name="email" [(ngModel)]="form.email" maxlength="200" #email="ngModel" />
-              <div class="invalid-feedback d-block" *ngIf="email.invalid && email.touched">Enter a valid email.</div>
+              <input class="form-control" type="email" name="email" [(ngModel)]="form.email" maxlength="200" #email="ngModel" email />
             </div>
             <div class="col-md-6">
               <label class="form-label">GST</label>
@@ -147,13 +158,6 @@ import {
               <label class="form-label">Report Footer</label>
               <textarea class="form-control" name="reportFooter" [(ngModel)]="form.reportFooter" rows="2"></textarea>
             </div>
-
-            <div class="col-md-3">
-              <div class="form-check mt-2">
-                <input id="labIsActive" class="form-check-input" type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
-                <label class="form-check-label" for="labIsActive">Active</label>
-              </div>
-            </div>
           </div>
 
           <div class="text-end mt-4">
@@ -167,6 +171,8 @@ import {
 })
 export class LaboratoriesListComponent implements OnInit {
   private readonly svc = inject(LaboratoriesService);
+  private readonly branchesSvc = inject(BranchesService);
+  private readonly auth = inject(AuthService);
 
   readonly page = signal(1);
   readonly pageSize = 20;
@@ -180,29 +186,39 @@ export class LaboratoriesListComponent implements OnInit {
 
   search = '';
   form = this.emptyForm();
-  groups: LaboratoryGroupOption[] = [];
+  organizations: OrganizationOption[] = [];
+  private defaultOrganizationId: number | null = null;
   readonly Math = Math;
 
   ngOnInit(): void {
-    this.loadGroups();
+    this.loadOrganizations();
     this.load();
   }
 
-  loadGroups(): void {
-    this.svc.getGroups().subscribe({
-      next: (items) => (this.groups = items ?? []),
-      error: () => (this.groups = []),
+  loadOrganizations(): void {
+    this.branchesSvc.listOrganizations().subscribe({
+      next: (items) => {
+        this.organizations = items ?? [];
+        const payloadOrgId = this.auth.getJwtPayload()?.organization_id;
+        this.defaultOrganizationId =
+          this.auth.getSelectedOrganizationId() ??
+          (typeof payloadOrgId === 'number' ? payloadOrgId : null);
+        if (!this.editingId()) {
+          this.form = { ...this.form, organizationId: this.defaultOrganizationId };
+        }
+      },
+      error: () => {
+        this.organizations = [];
+      },
     });
-  }
-
-  getGroupName(groupId: number | null | undefined): string {
-    if (groupId == null) return '—';
-    return this.groups.find((group) => group.id === groupId)?.name ?? `Group #${groupId}`;
   }
 
   openCreate(): void {
     this.editingId.set(null);
     this.form = this.emptyForm();
+    if (this.defaultOrganizationId != null) {
+      this.form = { ...this.form, organizationId: this.defaultOrganizationId };
+    }
     this.showForm.set(true);
     this.error.set('');
   }
@@ -211,9 +227,9 @@ export class LaboratoriesListComponent implements OnInit {
     this.editingId.set(row.id);
     this.form = {
       ...this.emptyForm(),
+      organizationId: row.organizationId,
       code: row.code,
       name: row.name,
-      laboratoryGroupId: row.laboratoryGroupId ?? null,
       logo: row.logo ?? '',
       address: row.address ?? '',
       phone: row.phone ?? '',
@@ -236,10 +252,15 @@ export class LaboratoriesListComponent implements OnInit {
       return;
     }
 
-    const payload = {
+    const isCreate = this.editingId() === null;
+    if (isCreate && !this.form.organizationId) {
+      this.error.set('Select an organization for this laboratory.');
+      return;
+    }
+
+    const payload: any = {
       code: (this.form.code || '').trim(),
       name: (this.form.name || '').trim(),
-      laboratoryGroupId: this.form.laboratoryGroupId ?? null,
       logo: (this.form.logo || '').trim() || null,
       address: (this.form.address || '').trim() || null,
       phone: (this.form.phone || '').trim() || null,
@@ -252,6 +273,7 @@ export class LaboratoriesListComponent implements OnInit {
       digitalSignature: (this.form.digitalSignature || '').trim() || null,
       isActive: !!this.form.isActive,
     };
+    if (isCreate) payload.organizationId = this.form.organizationId;
 
     this.saving.set(true);
     this.error.set('');
@@ -309,9 +331,9 @@ export class LaboratoriesListComponent implements OnInit {
 
   emptyForm() {
     return {
+      organizationId: null as number | null,
       code: '',
       name: '',
-      laboratoryGroupId: null as number | null,
       logo: '',
       address: '',
       phone: '',

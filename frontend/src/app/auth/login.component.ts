@@ -17,12 +17,28 @@ export class LoginComponent {
   step: 'credentials' | 'select-branch' = 'credentials';
   usernameOrEmail = '';
   password = '';
+  showPassword = false;
   error = '';
   submitting = false;
   selectingBranchId: number | null = null;
 
   branches: BranchOption[] = [];
   organizationName = '';
+
+  /** True when authorized branches span more than one organization. */
+  isMultiOrg(): boolean {
+    return new Set(this.branches.map((b) => b.organizationId)).size > 1;
+  }
+
+  /** Read-only organization label for the branch step (single-org users only). */
+  organizationLabel(): string | null {
+    if (!this.branches.length || this.isMultiOrg()) return null;
+    return this.branches[0].organizationName ?? null;
+  }
+
+  togglePassword(): void {
+    this.showPassword = !this.showPassword;
+  }
 
   submit(): void {
     this.error = '';

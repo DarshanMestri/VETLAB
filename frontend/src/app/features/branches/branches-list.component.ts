@@ -244,7 +244,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                 <select class="form-select" [(ngModel)]="form.clinicId" name="clinicId" required>
                   <option [ngValue]="null">Select Clinic</option>
                   @for(c of clinicOptions; track c.id) {
-                    <option [ngValue]="c.id">{{c.name}} ({{c.code}})</option>
+                    <option [ngValue]="c.id">{{c.name}} ({{c.code}}){{ isClinicMapped(c.id) ? ' — mapped' : '' }}</option>
                   }
                 </select>
                 <div class="text-muted small mt-1" *ngIf="form.organizationId && !clinicOptions.length">
@@ -256,7 +256,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                 <select class="form-select" [(ngModel)]="form.laboratoryId" name="laboratoryId" required>
                   <option [ngValue]="null">Select Laboratory</option>
                   @for(l of laboratoryOptions; track l.id) {
-                    <option [ngValue]="l.id">{{l.name}} ({{l.code}})</option>
+                    <option [ngValue]="l.id">{{l.name}} ({{l.code}}){{ isLaboratoryMapped(l.id) ? ' — mapped' : '' }}</option>
                   }
                 </select>
                 <div class="text-muted small mt-1" *ngIf="form.organizationId && !laboratoryOptions.length">
@@ -335,6 +335,8 @@ export class BranchesListComponent implements OnInit {
   clinics: ClinicOption[] = [];
   clinicOptions: ClinicOption[] = [];
   laboratoryOptions: LaboratoryOption[] = [];
+  private takenClinicIds = new Set<number>();
+  private takenLaboratoryIds = new Set<number>();
   organizations: OrganizationOption[] = [];
   form = this.emptyForm();
   selectedDepartmentId: number | null = null;
@@ -413,6 +415,8 @@ export class BranchesListComponent implements OnInit {
     } else {
       this.clinicOptions = [];
       this.laboratoryOptions = [];
+      this.takenClinicIds = new Set();
+      this.takenLaboratoryIds = new Set();
     }
   }
 
@@ -425,6 +429,34 @@ export class BranchesListComponent implements OnInit {
       next: (items) => (this.laboratoryOptions = items ?? []),
       error: () => (this.laboratoryOptions = []),
     });
+    this.loadTakenMappings(organizationId);
+  }
+
+  private loadTakenMappings(organizationId: number): void {
+    this.svc.list('', null, 1, 1000, organizationId).subscribe({
+      next: (res) => {
+        const items: BranchListItem[] = res?.items ?? [];
+        const editingId = this.editingId();
+        this.takenClinicIds = new Set(
+          items.filter((b) => b.id !== editingId && b.clinicId != null).map((b) => b.clinicId!),
+        );
+        this.takenLaboratoryIds = new Set(
+          items.filter((b) => b.id !== editingId && b.laboratoryId != null).map((b) => b.laboratoryId!),
+        );
+      },
+      error: () => {
+        this.takenClinicIds = new Set();
+        this.takenLaboratoryIds = new Set();
+      },
+    });
+  }
+
+  isClinicMapped(clinicId: number): boolean {
+    return this.takenClinicIds.has(clinicId);
+  }
+
+  isLaboratoryMapped(laboratoryId: number): boolean {
+    return this.takenLaboratoryIds.has(laboratoryId);
   }
 
   save(isValid: boolean): void {

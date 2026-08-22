@@ -28,8 +28,12 @@ export interface OrgBranch {
   id: number;
   code: string | null;
   name: string;
+  organizationId: number;
+  organizationName?: string | null;
   clinicId: number | null;
+  clinicName?: string | null;
   laboratoryId: number | null;
+  laboratoryName?: string | null;
   isActive: boolean;
 }
 
@@ -103,10 +107,12 @@ export class UsersService {
       .pipe(map((res) => res.items ?? []));
   }
 
-  /** All active branches of the signed-in admin's organization. */
+  /** Active branches across ALL organizations (Admin endpoint). */
   listOrgBranches(): Observable<OrgBranch[]> {
     return this.http
-      .get<PagedResponse<OrgBranch>>('/api/branches', { params: { pageSize: '500' } })
+      .get<PagedResponse<OrgBranch>>(`/api/branches`, {
+        params: { pageSize: '500', allOrganizations: 'true' },
+      })
       .pipe(map((res) => (res.items ?? []).filter((b) => b.isActive)));
   }
 

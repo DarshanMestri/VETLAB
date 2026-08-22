@@ -78,17 +78,16 @@ public class UserLocationsController : ControllerBase
             return BadRequest("Only one branch can be marked as default.");
 
         var branchIds = items.Select(a => a.BranchId).ToList();
+        // Branches may span multiple organizations: each granted branch is
+        // validated on its own and stamps its organization onto the row, so a
+        // non-admin user can hold access across the whole estate.
         var validBranches = await _db.Branches.AsNoTracking()
-            .Where(b => branchIds.Contains(b.Id)
-                        && b.OrganizationId == user.OrganizationId.Value
-                        && b.IsActive
-                        && !b.IsDeleted)
-            .Select(b => b.Id)
-            .ToListAsync();
+            .Where(b => branchIds.Contains(b.Id) && b.IsActive && !b.IsDeleted)
+            .ToDictionaryAsync(b => b.Id, b => b.OrganizationId!.Value);
 
-        var invalid = branchIds.Except(validBranches).ToList();
+        var invalid = branchIds.Except(validBranches.Keys).ToList();
         if (invalid.Count > 0)
-            return BadRequest($"Branch(es) {string.Join(", ", invalid)} are invalid or inactive for the user's organization.");
+            return BadRequest($"Branch(es) {string.Join(", ", invalid)} are invalid or inactive.");
 
         // Admins implicitly hold every branch of their organization.
         var roles = await _users.GetRolesAsync(user);
@@ -101,44 +100,58 @@ public class UserLocationsController : ControllerBase
             .Where(ul => ul.UserId == userId)
             .ToListAsync();
 
-        foreach (var item in items)
+        // Branches may span multiple organizations, and every UserLocation row
+        // carries its branch's organization. The ownership validator checks all
+        // dirty entries against a single execution organization, so mutations are
+        // applied and flushed one organization group at a time.
+        var payloadIds = items.Select(a => a.BranchId).ToHashSet();
+        int RowOrg(UserLocation row) => row.OrganizationId ?? user.OrganizationId!.Value;
+
+        foreach (var org in items.Select(i => validBranches[i.BranchId])
+                     .Concat(existing.Where(ul => !payloadIds.Contains(ul.BranchId) && !ul.IsDeleted).Select(RowOrg))
+                     .Distinct())
         {
-            var row = existing.FirstOrDefault(ul => ul.BranchId == item.BranchId);
-            if (row == null)
+            foreach (var item in items.Where(i => validBranches[i.BranchId] == org))
             {
-                row = new UserLocation
+                var row = existing.FirstOrDefault(ul => ul.BranchId == item.BranchId);
+                if (row == null)
                 {
-                    UserId = userId,
-                    BranchId = item.BranchId,
-                    CreatedBy = CurrentUserName(),
-                };
-                _db.UserLocations.Add(row);
-                existing.Add(row);
+                    row = new UserLocation
+                    {
+                        UserId = userId,
+                        BranchId = item.BranchId,
+                        CreatedBy = CurrentUserName(),
+                    };
+                    _db.UserLocations.Add(row);
+                    existing.Add(row);
+                }
+
+                row.IsActive = item.IsActive;
+                row.HasClinicAccess = item.HasClinicAccess;
+                row.HasLaboratoryAccess = item.HasLaboratoryAccess;
+                row.IsDefault = item.IsDefault;
+                row.OrganizationId = validBranches[item.BranchId];   // keep in sync with the branch's current organization
+                row.IsDeleted = false;              // re-activating a previously removed pair
+                row.DeletedDate = null;
+                row.DeletedBy = null;
+                row.ModifiedDate = DateTime.UtcNow;
+                row.ModifiedBy = CurrentUserName();
             }
 
-            row.IsActive = item.IsActive;
-            row.HasClinicAccess = item.HasClinicAccess;
-            row.HasLaboratoryAccess = item.HasLaboratoryAccess;
-            row.IsDefault = item.IsDefault;
-            row.IsDeleted = false;              // re-activating a previously removed pair
-            row.DeletedDate = null;
-            row.DeletedBy = null;
-            row.ModifiedDate = DateTime.UtcNow;
-            row.ModifiedBy = CurrentUserName();
+            // Payload is authoritative: anything not included loses its access.
+            foreach (var row in existing.Where(ul =>
+                         !payloadIds.Contains(ul.BranchId) && !ul.IsDeleted && RowOrg(ul) == org))
+            {
+                row.IsDeleted = true;
+                row.IsActive = false;
+                row.DeletedDate = DateTime.UtcNow;
+                row.DeletedBy = CurrentUserName();
+                row.ModifiedDate = DateTime.UtcNow;
+            }
+
+            await _db.SaveChangesAsSystemAsync(org);
         }
 
-        // Payload is authoritative: anything not included loses its access.
-        var payloadIds = items.Select(a => a.BranchId).ToHashSet();
-        foreach (var row in existing.Where(ul => !payloadIds.Contains(ul.BranchId) && !ul.IsDeleted))
-        {
-            row.IsDeleted = true;
-            row.IsActive = false;
-            row.DeletedDate = DateTime.UtcNow;
-            row.DeletedBy = CurrentUserName();
-            row.ModifiedDate = DateTime.UtcNow;
-        }
-
-        await _db.SaveChangesAsync();
         return Ok(await LoadAsync(userId));
     }
 

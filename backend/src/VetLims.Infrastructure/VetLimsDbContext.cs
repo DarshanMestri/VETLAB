@@ -22,7 +22,6 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
     // ==== DbSets: declare each **once** ====
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Organization> Organizations => Set<Organization>();
-    public DbSet<LaboratoryGroup> LaboratoryGroups => Set<LaboratoryGroup>();
     public DbSet<Clinic> Clinics => Set<Clinic>();
     public DbSet<Laboratory> Laboratories => Set<Laboratory>();
     public DbSet<Branch> Branches => Set<Branch>();
@@ -409,23 +408,6 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.HasIndex(x => x.Name);
         });
 
-        modelBuilder.Entity<LaboratoryGroup>(e =>
-        {
-            e.ToTable("laboratory_groups");
-            e.Property(x => x.OrganizationId).IsRequired();
-            e.Property(x => x.Code).IsRequired().HasMaxLength(100);
-            e.Property(x => x.Name).IsRequired().HasMaxLength(200);
-            e.Property(x => x.Description).HasMaxLength(2000);
-            e.HasIndex(x => x.OrganizationId);
-            e.HasIndex(x => x.Name);
-            e.HasIndex(x => x.IsActive);
-            e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
-            e.HasOne(x => x.Organization)
-             .WithMany()
-             .HasForeignKey(x => x.OrganizationId)
-             .OnDelete(DeleteBehavior.Restrict);
-        });
-
         modelBuilder.Entity<Clinic>(e =>
         {
             e.ToTable("clinics");
@@ -469,14 +451,9 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
             e.Property(x => x.EmailSettingsJson).HasColumnType("jsonb");
             e.HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
             e.HasIndex(x => x.Name);
-            e.HasIndex(x => x.LaboratoryGroupId);
             e.HasOne(x => x.Organization)
              .WithMany()
              .HasForeignKey(x => x.OrganizationId)
-             .OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(x => x.LaboratoryGroup)
-             .WithMany(x => x.Laboratories)
-             .HasForeignKey(x => x.LaboratoryGroupId)
              .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -509,6 +486,14 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
              .WithMany()
              .HasForeignKey(x => x.LaboratoryId)
              .OnDelete(DeleteBehavior.Restrict);
+            // A clinic or laboratory can be mapped to at most one branch at a
+            // time; deleting (soft) a branch releases its clinic/laboratory.
+            e.HasIndex(x => x.ClinicId)
+             .IsUnique()
+             .HasFilter("\"IsDeleted\" = false");
+            e.HasIndex(x => x.LaboratoryId)
+             .IsUnique()
+             .HasFilter("\"IsDeleted\" = false");
         });
 
         modelBuilder.Entity<BranchDepartment>(e =>
