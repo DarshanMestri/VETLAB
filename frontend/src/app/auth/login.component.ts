@@ -1,8 +1,8 @@
 // src/app/auth/login.component.ts
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AuthService, OrganizationOption, AuthBranchOption } from '../core/auth.service';
+import { AuthService, BranchOption, LoginStartResponse } from '../core/auth.service';
 
 @Component({
   standalone: true,
@@ -11,97 +11,76 @@ import { AuthService, OrganizationOption, AuthBranchOption } from '../core/auth.
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss'],
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent {
   private auth = inject(AuthService);
+
+  step: 'credentials' | 'select-branch' = 'credentials';
   usernameOrEmail = '';
   password = '';
   error = '';
-  organizations: OrganizationOption[] = [];
-  branches: AuthBranchOption[] = [];
-  selectedOrganizationId: number | null = null;
-  selectedBranchId: number | null = null;
-  loadingOrganizations = false;
-  loadingBranches = false;
+  submitting = false;
+  selectingBranchId: number | null = null;
 
-  ngOnInit(): void {
-    this.loadOrganizations();
-  }
+  branches: BranchOption[] = [];
+  organizationName = '';
 
-  onOrganizationChange(): void {
-    this.selectedBranchId = null;
-    this.branches = [];
-    if (this.selectedOrganizationId) {
-      this.loadBranches(this.selectedOrganizationId);
-    }
-  }
-
-  submit() {
+  submit(): void {
     this.error = '';
-    if (!this.selectedOrganizationId) {
-      this.error = 'Please select an organization.';
+    if (!this.usernameOrEmail.trim() || !this.password) {
+      this.error = 'Please enter your username and password.';
       return;
     }
-    if (!this.selectedBranchId) {
-      this.error = 'Please select a branch.';
-      return;
-    }
-    this.auth
-      .login(this.usernameOrEmail, this.password, this.selectedOrganizationId, this.selectedBranchId)
-      .subscribe({
-        next: () => {},
-        error: (e) => (this.error = e?.error?.title || e?.error || 'Invalid username or password'),
-      });
-  }
-
-  private loadOrganizations(): void {
-    this.loadingOrganizations = true;
-    this.auth.getOrganizations().subscribe({
-      next: (items) => {
-        this.organizations = items ?? [];
-        if (!this.organizations.length) {
-          this.error = 'No active organizations are configured. Contact administrator.';
-          this.loadingOrganizations = false;
+    this.submitting = true;
+    this.auth.login(this.usernameOrEmail.trim(), this.password).subscribe({
+      next: (res: LoginStartResponse) => {
+        this.submitting = false;
+        const branches = res.branches ?? [];
+        if (!res.requiresBranchSelection && branches.length === 1) {
+          this.chooseBranch(branches[0].id);
           return;
         }
-
-        const storedOrgId = this.auth.getSelectedOrganizationId();
-        const fallbackOrgId = this.organizations[0].id;
-        this.selectedOrganizationId = this.organizations.some((x) => x.id === storedOrgId)
-          ? storedOrgId
-          : fallbackOrgId;
-
-        if (this.selectedOrganizationId) {
-          this.loadBranches(this.selectedOrganizationId);
+        if (!branches.length) {
+          this.error = 'Your account has no branch access. Contact your administrator.';
+          return;
         }
-
-        this.loadingOrganizations = false;
+        this.branches = branches;
+        this.step = 'select-branch';
       },
       error: (e) => {
-        this.loadingOrganizations = false;
-        this.error = e?.error?.title || e?.error || 'Unable to load organizations.';
+        this.submitting = false;
+        this.error = this.extractError(e, 'Invalid username or password');
       },
     });
   }
 
-  private loadBranches(orgId: number): void {
-    this.loadingBranches = true;
-    this.auth.getBranches(orgId).subscribe({
-      next: (items) => {
-        this.branches = items ?? [];
-
-        const storedBranchId = this.auth.getSelectedBranchId();
-        this.selectedBranchId = this.branches.some((x) => x.id === storedBranchId)
-          ? storedBranchId
-          : this.branches.length === 1
-            ? this.branches[0].id
-            : null;
-
-        this.loadingBranches = false;
-      },
+  chooseBranch(branchId: number): void {
+    if (this.selectingBranchId) return;
+    this.error = '';
+    this.selectingBranchId = branchId;
+    this.auth.selectBranch(branchId).subscribe({
+      next: () => {},
       error: (e) => {
-        this.loadingBranches = false;
-        this.branches = [];
+        this.selectingBranchId = null;
+        this.error = this.extractError(e, 'Unable to select branch. Please sign in again.');
+        this.backToCredentials();
       },
     });
+  }
+
+  private extractError(e: any, fallback: string): string {
+    const err = e?.error;
+    if (typeof err === 'string' && err.trim()) return err;
+    if (err?.message) return err.message;
+    if (err?.title) return err.title;
+    if (err?.detail) return err.detail;
+    if (typeof e?.message === 'string' && e.message) return e.message;
+    return fallback;
+  }
+
+  backToCredentials(): void {
+    this.step = 'credentials';
+    this.branches = [];
+    this.selectingBranchId = null;
+    this.password = '';
   }
 }

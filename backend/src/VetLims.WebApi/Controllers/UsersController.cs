@@ -39,7 +39,6 @@ public class UsersController : ControllerBase
         string Password,
         string RoleName,
         int OrganizationId,
-        int? BranchId,
         bool IsActive = true);
     public record UpdateUserRequest(
         string UserName,
@@ -47,7 +46,6 @@ public class UsersController : ControllerBase
         string DisplayName,
         string RoleName,
         int OrganizationId,
-        int? BranchId,
         bool IsActive,
         string? NewPassword = null);
 
@@ -106,17 +104,14 @@ public class UsersController : ControllerBase
         if (organization is null)
             return BadRequest("Selected organization is invalid or inactive.");
 
-        if (req.BranchId.HasValue && !await _db.Branches.AsNoTracking()
-                .AnyAsync(x => x.Id == req.BranchId.Value && x.OrganizationId == req.OrganizationId && x.IsActive))
-            return BadRequest("Selected branch is invalid for the organization.");
-
+        // NOTE: branch access is no longer taken from the create payload; it is
+        // granted explicitly via /api/users/{id}/locations (UserLocationsController).
         var user = new AppUser
         {
             UserName = req.UserName.Trim(),
             Email = req.Email.Trim(),
             DisplayName = req.DisplayName.Trim(),
             OrganizationId = req.OrganizationId,
-            BranchId = req.BranchId,
             IsActive = req.IsActive,
             EmailConfirmed = true
         };
@@ -135,7 +130,7 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(List), new { id = user.Id }, new
         {
             user.Id, user.UserName, user.Email, user.DisplayName,
-            user.OrganizationId, user.BranchId, user.IsActive,
+            user.OrganizationId, user.IsActive,
             Roles = new[] { roleName }
         });
     }
@@ -158,10 +153,6 @@ public class UsersController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == req.OrganizationId && x.IsActive);
         if (organization is null)
             return BadRequest("Selected organization is invalid or inactive.");
-
-        if (req.BranchId.HasValue && !await _db.Branches.AsNoTracking()
-                .AnyAsync(x => x.Id == req.BranchId.Value && x.OrganizationId == req.OrganizationId && x.IsActive))
-            return BadRequest("Selected branch is invalid for the organization.");
 
         var newUserName = req.UserName.Trim();
         var newEmail = req.Email.Trim();
@@ -189,7 +180,8 @@ public class UsersController : ControllerBase
         user.Email = newEmail;
         user.DisplayName = req.DisplayName.Trim();
         user.OrganizationId = req.OrganizationId;
-        user.BranchId = req.BranchId;
+        // Branch access is managed exclusively through UserLocations; the legacy
+        // single-branch column is no longer written.
         user.IsActive = req.IsActive;
 
         var result = await _users.UpdateAsync(user);
@@ -221,7 +213,7 @@ public class UsersController : ControllerBase
         return Ok(new
         {
             user.Id, user.UserName, user.Email, user.DisplayName,
-            user.OrganizationId, user.BranchId, user.IsActive,
+            user.OrganizationId, user.IsActive,
             Roles = new[] { roleName }
         });
     }
@@ -293,10 +285,16 @@ public class UsersController : ControllerBase
             u.DisplayName,
             u.Email,
             u.IsActive,
-            u.BranchId,
             Roles = roleMap.TryGetValue(u.Id, out var r) ? r : new List<string>(),
             LastLoginAt = lastLogins.TryGetValue(u.Id, out var at) ? at : (DateTime?)null
         };
+
+        // Group by explicitly granted branch access (UserLocation), not the legacy
+        // single-branch column.
+        var locationIndex = await _db.UserLocations.AsNoTracking()
+            .Where(ul => !ul.IsDeleted)
+            .Select(ul => new { ul.UserId, ul.BranchId })
+            .ToListAsync();
 
         var branchNodes = branches.Select(b => new
         {
@@ -304,11 +302,20 @@ public class UsersController : ControllerBase
             b.Code,
             b.Name,
             b.IsActive,
-            Users = users.Where(u => u.BranchId == b.Id).Select(UserNode).ToList()
+            Users = locationIndex
+                .Where(l => l.BranchId == b.Id)
+                .Join(users, l => l.UserId, u => u.Id, (_, u) => u)
+                .Select(UserNode)
+                .ToList()
         }).ToList();
 
+        var assignedUserIds = locationIndex
+            .Where(l => branches.Any(b => b.Id == l.BranchId))
+            .Select(l => l.UserId)
+            .ToHashSet();
+
         var unassigned = users
-            .Where(u => !u.BranchId.HasValue || !branches.Any(b => b.Id == u.BranchId.Value))
+            .Where(u => !assignedUserIds.Contains(u.Id))
             .Select(UserNode)
             .ToList();
 

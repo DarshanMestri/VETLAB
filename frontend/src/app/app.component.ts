@@ -5,14 +5,16 @@ import { RouterOutlet } from '@angular/router';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { NavbarComponent } from './layout/navbar.component';
+import { AppHeaderComponent } from './layout/app-header.component';
 import { AuthService } from './core/auth.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, NavbarComponent],
+  imports: [CommonModule, RouterOutlet, NavbarComponent, AppHeaderComponent],
   template: `
     <app-navbar *ngIf="showNavbar()"></app-navbar>
+    <app-header *ngIf="showNavbar()"></app-header>
     <main
       [class.app-content]="showNavbar()"
       [class.container]="!isLoginRoute()"

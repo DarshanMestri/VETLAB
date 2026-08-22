@@ -13,14 +13,24 @@ namespace VetLims.WebApi.Controllers;
 public class LaboratoriesController(VetLimsDbContext db, ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<LaboratoryDto>>> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<ActionResult<IEnumerable<LaboratoryDto>>> List(
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] int? organizationId = null)
     {
-        var organizationId = await ResolveCurrentOrganizationIdAsync();
-        if (!organizationId.HasValue)
+        // Optional explicit scope (used by cross-org pickers such as the Branch
+        // master): validated active org overrides the caller's own organization.
+        if (organizationId.HasValue && !await db.Organizations.AsNoTracking()
+                .AnyAsync(x => x.Id == organizationId.Value && !x.IsDeleted && x.IsActive))
+            return BadRequest("Selected organization is invalid or inactive.");
+
+        var scopeOrganizationId = organizationId ?? await ResolveCurrentOrganizationIdAsync();
+        if (!scopeOrganizationId.HasValue)
             return Forbid();
 
         var q = db.Laboratories.AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted);
+            .Where(x => x.OrganizationId == scopeOrganizationId.Value && !x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {

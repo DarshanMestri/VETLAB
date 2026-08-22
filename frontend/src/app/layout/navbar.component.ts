@@ -89,6 +89,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Masters',
     icon: ICONS.database,
     children: [
+      // Setup order: Organization → Branches → Laboratory & Clinic → Departments.
+      // Units are not a setup step; they are managed via Administration → Masters
+      // and the Laboratory Master screen.
       {
         label: 'Organizations',
         route: '/organizations',
@@ -96,13 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: ICONS.building,
         step: 1,
       },
-      {
-        label: 'Laboratory Groups',
-        route: '/laboratory-groups',
-        roles: ['Admin'],
-        icon: ICONS.branches,
-        step: 2,
-      },
+      { label: 'Branches', route: '/branches', roles: ['Admin'], icon: ICONS.mapPin, step: 2 },
       {
         label: 'Laboratories',
         route: '/laboratories',
@@ -110,22 +107,14 @@ const NAV_GROUPS: NavGroup[] = [
         icon: ICONS.flask,
         step: 3,
       },
-      {
-        label: 'Clinics',
-        route: '/clinics',
-        roles: ['Admin'],
-        icon: ICONS.paw,
-        step: 4,
-      },
-      { label: 'Branches', route: '/branches', roles: ['Admin'], icon: ICONS.mapPin, step: 5 },
+      { label: 'Clinics', route: '/clinics', roles: ['Admin'], icon: ICONS.paw, step: 4 },
       {
         label: 'Departments',
         route: '/departments',
         roles: ['Admin', 'Manager'],
         icon: ICONS.layout,
-        step: 6,
+        step: 5,
       },
-      { label: 'Units', route: '/units', roles: ['Admin', 'Manager'], icon: ICONS.ruler, step: 7 },
     ],
   },
   {
@@ -254,8 +243,19 @@ const NAV_GROUPS: NavGroup[] = [
       </nav>
 
       <div class="sidebar-footer" *ngIf="auth.isAuthenticated(); else loginBtn">
-        <div class="user-label">
-          Signed in as <strong>{{ (auth.username$ | async) || 'User' }}</strong>
+        <div class="user-card">
+          <div class="uc-top">
+            <span class="uc-avatar">{{ initial }}</span>
+            <span class="uc-name" [title]="username">{{ username }}</span>
+          </div>
+          <div class="uc-meta" [title]="organizationName">
+            <span class="uc-icon" [innerHTML]="trustSvg(ICONS.building)"></span>
+            <span class="uc-text">{{ organizationName }}</span>
+          </div>
+          <div class="uc-meta" [title]="branchName">
+            <span class="uc-icon" [innerHTML]="trustSvg(ICONS.mapPin)"></span>
+            <span class="uc-text">{{ branchName }}</span>
+          </div>
         </div>
         <button class="logout-button" type="button" (click)="logout()">Logout</button>
       </div>
@@ -556,17 +556,76 @@ const NAV_GROUPS: NavGroup[] = [
         border-top: 1px solid rgba(147, 197, 253, 0.14);
       }
 
-      .user-label {
-        overflow: hidden;
+      .user-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
         margin-bottom: 0.65rem;
-        color: rgba(191, 219, 254, 0.55);
-        font-size: 0.74rem;
+        padding: 0.7rem 0.6rem;
+        border: 1px solid rgba(147, 197, 253, 0.16);
+        border-radius: 0.55rem;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .uc-top {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+      }
+
+      .uc-avatar {
+        display: grid;
+        place-items: center;
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        color: #fff;
+        border: 1px solid rgba(147, 197, 253, 0.4);
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2563eb, #1e40af);
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .uc-name {
+        min-width: 0;
+        overflow: hidden;
+        color: #fff;
+        font-size: 0.86rem;
+        font-weight: 600;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
 
-        strong {
-          color: #fff;
+      .uc-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        min-width: 0;
+      }
+
+      .uc-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 16px;
+        width: 16px;
+        height: 16px;
+        color: #93c5fd;
+
+        svg {
+          width: 13px;
+          height: 13px;
         }
+      }
+
+      .uc-text {
+        min-width: 0;
+        overflow: hidden;
+        color: rgba(219, 234, 254, 0.72);
+        font-size: 0.72rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .logout-button,
@@ -713,6 +772,22 @@ export class NavbarComponent {
   logout(): void {
     this.auth.logout();
     this.closeSidebar();
+  }
+
+  get username(): string {
+    return this.auth.getUsername() || 'Unknown user';
+  }
+
+  get organizationName(): string {
+    return this.auth.getOrganizationName() || 'No organization';
+  }
+
+  get branchName(): string {
+    return this.auth.getBranchName() || 'No branch';
+  }
+
+  get initial(): string {
+    return this.username.charAt(0).toUpperCase();
   }
 
   private setCollapsed(collapsed: boolean): void {

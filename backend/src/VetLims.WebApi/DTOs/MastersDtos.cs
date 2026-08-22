@@ -104,9 +104,9 @@ public record ClinicDto(int Id, int OrganizationId, string Code, string Name, st
 public record ClinicCreateDto(string Code, string Name, string? ShortName = null, string? Phone = null, string? Email = null, string? Address = null, string? Logo = null, string? LicenseNumber = null, bool IsActive = true);
 public record ClinicUpdateDto(string Code, string Name, string? ShortName = null, string? Phone = null, string? Email = null, string? Address = null, string? Logo = null, string? LicenseNumber = null, bool IsActive = true);
 
-public record BranchDto(int Id, int OrganizationId, int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive);
-public record BranchCreateDto(int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
-public record BranchUpdateDto(int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true);
+public record BranchDto(int Id, int OrganizationId, string? OrganizationName, int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive);
+public record BranchCreateDto(int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true, int? OrganizationId = null);
+public record BranchUpdateDto(int ClinicId, int LaboratoryId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsActive = true, int? OrganizationId = null);
 public record BranchDepartmentDto(int Id, int BranchId, int DepartmentId, string DepartmentName, string? DepartmentCode, bool IsActive);
 
 public record RoleDto(int Id, string Name);

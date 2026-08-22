@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
@@ -60,6 +61,15 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
     options.AddPolicy("RequireManager", policy => policy.RequireRole("Admin", "Manager"));
+
+    // Security default: every API endpoint requires an authenticated user carrying an
+    // active branch context (issued after explicit branch selection). Endpoints that
+    // declare their own [Authorize]/[Authorize(Policy=...)] or [AllowAnonymous] are
+    // exempt from this fallback.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireClaim("branch_id")
+        .Build();
 });
 
 builder.Services.AddCors(o => o.AddPolicy("Dev", p =>

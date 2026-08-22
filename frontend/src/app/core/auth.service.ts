@@ -1,32 +1,31 @@
 // src/app/core/auth.service.ts
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subscription, timer } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { jwtDecode } from 'jwt-decode';
 
 const API_URL = '/api/auth';
 type Decoded = Record<string, any>;
 
-interface LoginResponse {
+export interface LoginStartResponse {
+  requiresBranchSelection: boolean;
+  branches: BranchOption[];
+  contextToken?: string;
+}
+
+export interface BranchOption {
+  id: number;
+  name: string;
+  code: string | null;
+  hasClinicAccess: boolean;
+  hasLaboratoryAccess: boolean;
+  isDefault: boolean;
+}
+
+interface SelectBranchResponse {
   token: string;
-  organizationId?: number;
-  branchId?: number | null;
-}
-
-export interface OrganizationOption {
-  id: number;
-  code: string;
-  name: string;
-}
-
-export interface AuthBranchOption {
-  id: number;
-  code: string;
-  name: string;
-  laboratoryId: number;
-  laboratoryName: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -36,6 +35,9 @@ export class AuthService {
   private tokenKey = 'token';
   private orgKey = 'selectedOrganizationId';
   private branchKey = 'selectedBranchId';
+
+  // Short-lived token issued by step 1 while the user picks a branch.
+  private _contextToken: string | null = null;
 
   private _token$ = new BehaviorSubject<string | null>(null);
   private _roles$ = new BehaviorSubject<string[]>([]);
@@ -52,34 +54,41 @@ export class AuthService {
 
   constructor() {
     const t = this.safeGet(this.tokenKey);
-    if (t) this.setSession(t);
+    if (t && this.isExpired(t)) {
+      this.safeRemove(this.tokenKey);
+    } else if (t) {
+      this.setSession(t, { persistLocation: false });
+    }
     this._selectedOrganizationId$.next(this.parseStoredNumber(this.safeGet(this.orgKey)));
     this._selectedBranchId$.next(this.parseStoredNumber(this.safeGet(this.branchKey)));
   }
 
-  login(
-    usernameOrEmail: string,
-    password: string,
-    organizationId: number,
-    branchId: number | null
-  ): Observable<LoginResponse> {
+  /** Step 1: credentials only. Returns the branch list scoped to the user's access. */
+  login(usernameOrEmail: string, password: string): Observable<LoginStartResponse> {
     return this.http
-      .post<LoginResponse>(`${API_URL}/login`, { usernameOrEmail, password, organizationId, branchId })
+      .post<LoginStartResponse>(`${API_URL}/login`, { usernameOrEmail, password })
+      .pipe(tap((res) => (this._contextToken = res.contextToken ?? null)));
+  }
+
+  /** Step 2: exchange the context token (or an existing full token) for a branch-scoped JWT. */
+  selectBranch(branchId: number): Observable<void> {
+    const token = this._contextToken ?? this.getToken();
+    const headers = new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
+    return this.http
+      .post<SelectBranchResponse>(`${API_URL}/select-branch`, { branchId }, { headers })
       .pipe(
         tap((res) => {
+          this._contextToken = null;
           this.setSession(res.token);
-          this.setSessionLocation(res.organizationId ?? organizationId, res.branchId ?? branchId);
           this.router.navigate(['/dashboard']);
-        })
+        }),
+        map(() => void 0)
       );
   }
 
-  getOrganizations(): Observable<OrganizationOption[]> {
-    return this.http.get<OrganizationOption[]>(`${API_URL}/organizations`);
-  }
-
-  getBranches(organizationId: number): Observable<AuthBranchOption[]> {
-    return this.http.get<AuthBranchOption[]>(`${API_URL}/branches`, { params: { organizationId: String(organizationId) } });
+  /** Branches available to the signed-in user (used by the header switcher). */
+  myBranches(): Observable<BranchOption[]> {
+    return this.http.get<BranchOption[]>(`${API_URL}/my-branches`);
   }
 
   logout() {
@@ -90,10 +99,7 @@ export class AuthService {
   isAuthenticated(): boolean {
     const token = this._token$.value ?? this.safeGet(this.tokenKey);
     if (!token) return false;
-    const d = this.decode(token);
-    const exp = d?.exp as number | undefined;
-    if (!exp) return true;
-    return exp * 1000 > Date.now() + 30_000;
+    return !this.isExpired(token);
   }
 
   getToken(): string | null {
@@ -123,6 +129,16 @@ export class AuthService {
     return this.decode(token);
   }
 
+  getOrganizationName(): string | null {
+    const d = this.getJwtPayload();
+    return d?.organization_name ?? null;
+  }
+
+  getBranchName(): string | null {
+    const d = this.getJwtPayload();
+    return d?.branch_name ?? null;
+  }
+
   hasClinicAccess(): boolean {
     const payload = this.getJwtPayload();
     return payload?.clinic_access === 'true';
@@ -143,7 +159,7 @@ export class AuthService {
   }
 
   // ---- internals ----
-  private setSession(token: string) {
+  private setSession(token: string, opts: { persistLocation?: boolean } = {}) {
     this.safeSet(this.tokenKey, token);
     this._token$.next(token);
 
@@ -151,17 +167,32 @@ export class AuthService {
     const roles = this.extractRoles(d);
     this._roles$.next(roles);
 
-    const name = d?.unique_name ?? d?.name ?? d?.username ?? d?.sub ?? d?.email ?? null;
+    const name =
+      d?.display_name ?? d?.displayName ?? d?.unique_name ?? d?.name ?? d?.sub ?? d?.email ?? null;
     this._username$.next(name);
+
+    const orgId = typeof d?.organization_id === 'number' ? d.organization_id : null;
+    const branchId = typeof d?.branch_id === 'number' ? d.branch_id : null;
+    if (opts.persistLocation !== false) {
+      this.setSessionLocation(orgId, branchId);
+    } else {
+      this._selectedOrganizationId$.next(orgId);
+      this._selectedBranchId$.next(branchId);
+    }
 
     this.scheduleAutoLogout(d?.exp);
   }
 
   private clearSession() {
     this.safeRemove(this.tokenKey);
+    this.safeRemove(this.orgKey);
+    this.safeRemove(this.branchKey);
+    this._contextToken = null;
     this._token$.next(null);
     this._roles$.next([]);
     this._username$.next(null);
+    this._selectedOrganizationId$.next(null);
+    this._selectedBranchId$.next(null);
     this.expiryTimer?.unsubscribe();
   }
 
@@ -186,6 +217,7 @@ export class AuthService {
       d['role'] ??
       d['roles'] ??
       d['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ??
+      d['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role'] ??
       [];
     if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === 'string');
     if (typeof raw === 'string') return [raw];
@@ -213,5 +245,12 @@ export class AuthService {
     if (!value) return null;
     const parsed = Number(value);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private isExpired(token: string): boolean {
+    const d = this.decode(token);
+    const exp = d?.exp as number | undefined;
+    if (!exp) return false;
+    return exp * 1000 <= Date.now() + 30_000;
   }
 }

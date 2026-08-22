@@ -565,6 +565,7 @@ public class VetLimsDbContext : IdentityDbContext<AppUser, IdentityRole<int>, in
         {
             e.ToTable("user_locations");
             e.Property(x => x.IsDefault).HasDefaultValue(false);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
             e.Property(x => x.HasClinicAccess).HasDefaultValue(true);
             e.Property(x => x.HasLaboratoryAccess).HasDefaultValue(true);
             e.HasIndex(x => new { x.UserId, x.BranchId }).IsUnique();

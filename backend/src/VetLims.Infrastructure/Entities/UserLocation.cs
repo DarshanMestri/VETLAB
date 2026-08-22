@@ -12,6 +12,9 @@ public class UserLocation : BaseEntity, IOrganizationOwned
     // Whether this location is the user's default selected location
     public bool IsDefault { get; set; } = false;
 
+    // Explicitly enable/disable this branch assignment without deleting it.
+    public bool IsActive { get; set; } = true;
+
     // Per-branch access control
     public bool HasClinicAccess { get; set; } = true;
     public bool HasLaboratoryAccess { get; set; } = true;

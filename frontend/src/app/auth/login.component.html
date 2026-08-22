@@ -129,127 +129,124 @@
 
         <header class="form-header">
           <div class="form-kicker">Secure sign in</div>
-          <h2>Welcome back</h2>
-          <p>Enter your account credentials to continue.</p>
+          <h2>{{ step === 'credentials' ? 'Welcome back' : 'Choose your branch' }}</h2>
+          <p>
+            {{
+              step === 'credentials'
+                ? 'Enter your account credentials to continue.'
+                : 'Select the branch you want to work in.'
+            }}
+          </p>
         </header>
 
-        <form (ngSubmit)="submit()" novalidate>
+        <div *ngIf="step === 'credentials'">
+          <form (ngSubmit)="submit()" novalidate>
+            <div *ngIf="error" class="alert alert-danger alert-anim" role="alert">{{ error }}</div>
+
+            <div class="form-field field-1">
+              <label class="form-label" for="username">Username or Email</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+                    <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+                  </svg>
+                </span>
+                <input
+                  id="username"
+                  class="form-control"
+                  type="text"
+                  [(ngModel)]="usernameOrEmail"
+                  name="username"
+                  autocomplete="username"
+                  placeholder="you@clinic.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-field field-2">
+              <label class="form-label" for="password">Password</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <rect x="5" y="11" width="14" height="9" rx="2" />
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                  </svg>
+                </span>
+                <input
+                  id="password"
+                  class="form-control"
+                  type="password"
+                  [(ngModel)]="password"
+                  name="password"
+                  autocomplete="current-password"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+
+            <button class="btn-login field-3" type="submit" [disabled]="submitting">
+              <span class="btn-shine" aria-hidden="true"></span>
+              <span class="btn-label">{{ submitting ? 'Signing in…' : 'Sign In' }}</span>
+              <svg
+                class="btn-arrow"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14" />
+                <path d="M13 6l6 6-6 6" />
+              </svg>
+            </button>
+          </form>
+        </div>
+
+        <div *ngIf="step === 'select-branch'" class="branch-select">
           <div *ngIf="error" class="alert alert-danger alert-anim" role="alert">{{ error }}</div>
 
-          <div class="form-field field-1">
-            <label class="form-label" for="organization">Organization</label>
-            <div class="input-wrap">
-              <span class="input-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z" />
-                  <circle cx="12" cy="10" r="2.6" />
-                </svg>
-              </span>
-              <select
-                id="organization"
-                class="form-control"
-                [(ngModel)]="selectedOrganizationId"
-                name="organizationId"
-                (ngModelChange)="onOrganizationChange()"
-                [disabled]="loadingOrganizations"
-                required
-              >
-                <option [ngValue]="null">Select organization</option>
-                <option *ngFor="let org of organizations" [ngValue]="org.id">
-                  {{ org.name }} ({{ org.code }})
-                </option>
-              </select>
-            </div>
-          </div>
+          <button type="button" class="back-link" (click)="backToCredentials()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M19 12H5" />
+              <path d="M11 18l-6-6 6-6" />
+            </svg>
+            Use a different account
+          </button>
 
-          <div class="form-field field-2">
-            <label class="form-label" for="branch">Branch</label>
-            <div class="input-wrap">
-              <span class="input-icon" aria-hidden="true">
+          <div class="branch-list">
+            <button
+              type="button"
+              class="branch-card"
+              *ngFor="let b of branches"
+              (click)="chooseBranch(b.id)"
+              [disabled]="selectingBranchId !== null"
+              [class.is-busy]="selectingBranchId === b.id"
+            >
+              <span class="branch-avatar" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="M12 2 2 7l10 5 10-5-10-5z" />
                   <path d="M2 12l10 5 10-5" />
                   <path d="M2 17l10 5 10-5" />
                 </svg>
               </span>
-              <select
-                id="branch"
-                class="form-control"
-                [(ngModel)]="selectedBranchId"
-                name="branchId"
-                [disabled]="loadingBranches || !selectedOrganizationId"
-                required
-              >
-                <option [ngValue]="null">{{ loadingBranches ? 'Loading branches…' : 'Select branch' }}</option>
-                <option *ngFor="let branch of branches" [ngValue]="branch.id">
-                  {{ branch.name }} ({{ branch.code }})
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-field field-3">
-            <label class="form-label" for="username">Username or Email</label>
-            <div class="input-wrap">
-              <span class="input-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-                  <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+              <span class="branch-info">
+                <strong>{{ b.name }}</strong>
+                <small>
+                  {{ b.code ? b.code + ' · ' : '' }}
+                  {{ b.hasLaboratoryAccess && b.hasClinicAccess ? 'Clinic & Laboratory' : b.hasLaboratoryAccess ? 'Laboratory' : 'Clinic' }}
+                </small>
+              </span>
+              <span class="branch-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 6l6 6-6 6" />
                 </svg>
               </span>
-              <input
-                id="username"
-                class="form-control"
-                type="text"
-                [(ngModel)]="usernameOrEmail"
-                name="username"
-                autocomplete="username"
-                placeholder="you@clinic.com"
-                required
-              />
-            </div>
+            </button>
           </div>
-
-          <div class="form-field field-4">
-            <label class="form-label" for="password">Password</label>
-            <div class="input-wrap">
-              <span class="input-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <rect x="5" y="11" width="14" height="9" rx="2" />
-                  <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                </svg>
-              </span>
-              <input
-                id="password"
-                class="form-control"
-                type="password"
-                [(ngModel)]="password"
-                name="password"
-                autocomplete="current-password"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-          </div>
-
-          <button class="btn-login field-5" type="submit" [disabled]="loadingOrganizations || loadingBranches">
-            <span class="btn-shine" aria-hidden="true"></span>
-            <span class="btn-label">
-              {{ loadingOrganizations ? 'Loading organizations…' : loadingBranches ? 'Loading branches…' : 'Sign In' }}
-            </span>
-            <svg
-              class="btn-arrow"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <path d="M5 12h14" />
-              <path d="M13 6l6 6-6 6" />
-            </svg>
-          </button>
-        </form>
+        </div>
 
         <div class="form-footer">
           <span>Can't sign in? Contact your system administrator for access.</span>

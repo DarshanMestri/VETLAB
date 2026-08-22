@@ -5,6 +5,7 @@ import { Observable, map } from 'rxjs';
 export interface BranchListItem {
   id: number;
   organizationId: number;
+  organizationName?: string | null;
   clinicId?: number | null;
   laboratoryId?: number | null;
   code: string;
@@ -26,9 +27,21 @@ export interface BranchCreateRequest {
   phone?: string | null;
   email?: string | null;
   isActive?: boolean;
+  organizationId?: number | null;
 }
 
 export interface BranchUpdateRequest extends BranchCreateRequest {}
+
+export interface OrganizationOption {
+  id: number;
+  code?: string | null;
+  name: string;
+  isActive: boolean;
+}
+
+interface PagedOrganizationResponse {
+  items?: OrganizationOption[];
+}
 
 export interface ClinicOption {
   id: number;
@@ -112,6 +125,12 @@ export class BranchesService {
 
   toggleStatus(id: number, isActive: boolean): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/status`, isActive);
+  }
+
+  listOrganizations(): Observable<OrganizationOption[]> {
+    return this.http
+      .get<PagedOrganizationResponse>('/api/organizations', { params: { pageSize: '1000' } })
+      .pipe(map((response) => response.items ?? []));
   }
 
   getClinics(organizationId?: number): Observable<ClinicOption[]> {

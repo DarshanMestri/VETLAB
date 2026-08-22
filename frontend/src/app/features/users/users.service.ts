@@ -24,16 +24,27 @@ export interface OrganizationOption {
   name: string;
 }
 
-export interface BranchOption {
+export interface OrgBranch {
   id: number;
-  code: string;
+  code: string | null;
   name: string;
+  clinicId: number | null;
+  laboratoryId: number | null;
+  isActive: boolean;
 }
 
-export interface BranchAccess {
+export interface BranchAccessItem {
   branchId: number;
+  isActive: boolean;
   hasClinicAccess: boolean;
   hasLaboratoryAccess: boolean;
+  isDefault: boolean;
+}
+
+export interface BranchAccessRow extends BranchAccessItem {
+  branchName: string;
+  laboratoryName: string;
+  clinicName: string;
 }
 
 export interface CreateUserRequest {
@@ -43,7 +54,6 @@ export interface CreateUserRequest {
   password: string;
   roleName: string;
   organizationId: number;
-  branchAccess: BranchAccess[];
   isActive: boolean;
 }
 
@@ -53,7 +63,6 @@ export interface UpdateUserRequest {
   displayName: string;
   roleName: string;
   organizationId: number;
-  branchAccess: BranchAccess[];
   isActive: boolean;
   newPassword?: string;
 }
@@ -94,9 +103,18 @@ export class UsersService {
       .pipe(map((res) => res.items ?? []));
   }
 
-  listBranches(organizationId: number): Observable<BranchOption[]> {
-    return this.http.get<BranchOption[]>('/api/auth/branches', {
-      params: { organizationId: String(organizationId) },
-    });
+  /** All active branches of the signed-in admin's organization. */
+  listOrgBranches(): Observable<OrgBranch[]> {
+    return this.http
+      .get<PagedResponse<OrgBranch>>('/api/branches', { params: { pageSize: '500' } })
+      .pipe(map((res) => (res.items ?? []).filter((b) => b.isActive)));
+  }
+
+  getLocations(userId: number): Observable<BranchAccessRow[]> {
+    return this.http.get<BranchAccessRow[]>(`${this.baseUrl}/${userId}/locations`);
+  }
+
+  saveLocations(userId: number, accesses: BranchAccessItem[]): Observable<BranchAccessRow[]> {
+    return this.http.put<BranchAccessRow[]>(`${this.baseUrl}/${userId}/locations`, { accesses });
   }
 }

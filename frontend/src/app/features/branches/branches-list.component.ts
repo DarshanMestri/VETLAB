@@ -1,7 +1,14 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BranchesService, BranchListItem, ClinicOption, LaboratoryOption } from './branches.service';
+import { AuthService } from '../../core/auth.service';
+import {
+  BranchesService,
+  BranchListItem,
+  ClinicOption,
+  LaboratoryOption,
+  OrganizationOption,
+} from './branches.service';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -74,6 +81,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             <tr>
               <th>Code</th>
               <th>Name</th>
+              <th>Organization</th>
               <th>Clinic</th>
               <th>Laboratory</th>
               <th>Address</th>
@@ -87,6 +95,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             <tr *ngFor="let row of filteredRows()">
               <td>{{ row.code }}</td>
               <td>{{ row.name }}</td>
+              <td>{{ row.organizationName || '—' }}</td>
               <td>{{ row.clinicName || getClinicName(row.clinicId) }}</td>
               <td>{{ row.laboratoryName || getLaboratoryName(row.laboratoryId) }}</td>
               <td>{{ row.address || '—' }}</td>
@@ -216,6 +225,21 @@ type StatusFilter = 'all' | 'active' | 'inactive';
           <form #branchForm="ngForm" (ngSubmit)="save(branchForm.valid ?? false)" novalidate>
             <div class="row g-3">
               <div class="col-md-6">
+                <label class="form-label">Organization <span class="text-danger">*</span></label>
+                <select
+                  class="form-select"
+                  [(ngModel)]="form.organizationId"
+                  (ngModelChange)="onOrganizationChange($event)"
+                  name="organizationId"
+                  required
+                >
+                  <option [ngValue]="null">Select Organization</option>
+                  @for(o of organizations; track o.id) {
+                    <option [ngValue]="o.id">{{o.name}}</option>
+                  }
+                </select>
+              </div>
+              <div class="col-md-6">
                 <label class="form-label">Clinic <span class="text-danger">*</span></label>
                 <select class="form-select" [(ngModel)]="form.clinicId" name="clinicId" required>
                   <option [ngValue]="null">Select Clinic</option>
@@ -223,6 +247,9 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                     <option [ngValue]="c.id">{{c.name}} ({{c.code}})</option>
                   }
                 </select>
+                <div class="text-muted small mt-1" *ngIf="form.organizationId && !clinicOptions.length">
+                  No clinics available in the selected organization.
+                </div>
               </div>
               <div class="col-md-6">
                 <label class="form-label">Laboratory <span class="text-danger">*</span></label>
@@ -232,6 +259,9 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                     <option [ngValue]="l.id">{{l.name}} ({{l.code}})</option>
                   }
                 </select>
+                <div class="text-muted small mt-1" *ngIf="form.organizationId && !laboratoryOptions.length">
+                  No laboratories available in the selected organization.
+                </div>
               </div>
 
               <div class="col-md-6">
@@ -283,6 +313,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 })
 export class BranchesListComponent implements OnInit {
   private readonly svc = inject(BranchesService);
+  private readonly auth = inject(AuthService);
 
   readonly page = signal(1);
   readonly pageSize = 20;
@@ -304,12 +335,16 @@ export class BranchesListComponent implements OnInit {
   clinics: ClinicOption[] = [];
   clinicOptions: ClinicOption[] = [];
   laboratoryOptions: LaboratoryOption[] = [];
+  organizations: OrganizationOption[] = [];
   form = this.emptyForm();
   selectedDepartmentId: number | null = null;
   selectedTestId: number | null = null;
   readonly Math = Math;
 
+  private defaultOrganizationId: number | null = null;
+
   ngOnInit(): void {
+    this.loadOrganizations();
     this.loadClinics();
     this.loadLaboratories();
     this.load();
@@ -341,7 +376,10 @@ export class BranchesListComponent implements OnInit {
 
   openCreate(): void {
     this.editingId.set(null);
-    this.form = this.emptyForm();
+    this.form = { ...this.emptyForm(), organizationId: this.defaultOrganizationId };
+    if (this.form.organizationId != null) {
+      this.reloadDependentOptions(this.form.organizationId);
+    }
     this.showForm.set(true);
     this.error.set('');
   }
@@ -350,6 +388,7 @@ export class BranchesListComponent implements OnInit {
     this.editingId.set(row.id);
     this.form = {
       ...this.emptyForm(),
+      organizationId: row.organizationId ?? null,
       clinicId: row.clinicId ?? null,
       laboratoryId: row.laboratoryId ?? null,
       code: row.code,
@@ -359,13 +398,43 @@ export class BranchesListComponent implements OnInit {
       email: row.email ?? '',
       isActive: row.isActive,
     };
+    if (this.form.organizationId != null) {
+      this.reloadDependentOptions(this.form.organizationId);
+    }
     this.showForm.set(true);
     this.error.set('');
+  }
+
+  onOrganizationChange(organizationId: number | null): void {
+    this.form.clinicId = null;
+    this.form.laboratoryId = null;
+    if (organizationId != null) {
+      this.reloadDependentOptions(organizationId);
+    } else {
+      this.clinicOptions = [];
+      this.laboratoryOptions = [];
+    }
+  }
+
+  private reloadDependentOptions(organizationId: number): void {
+    this.svc.getClinics(organizationId).subscribe({
+      next: (items) => (this.clinicOptions = items ?? []),
+      error: () => (this.clinicOptions = []),
+    });
+    this.svc.getLaboratories(organizationId).subscribe({
+      next: (items) => (this.laboratoryOptions = items ?? []),
+      error: () => (this.laboratoryOptions = []),
+    });
   }
 
   save(isValid: boolean): void {
     if (!isValid) {
       this.error.set('Correct the highlighted validation errors.');
+      return;
+    }
+
+    if (!this.form.organizationId) {
+      this.error.set('Select an organization.');
       return;
     }
 
@@ -380,6 +449,7 @@ export class BranchesListComponent implements OnInit {
     }
 
     const payload = {
+      organizationId: this.form.organizationId,
       clinicId: this.form.clinicId,
       laboratoryId: this.form.laboratoryId,
       code: (this.form.code || '').trim(),
@@ -596,6 +666,21 @@ export class BranchesListComponent implements OnInit {
     });
   }
 
+  loadOrganizations(): void {
+    this.svc.listOrganizations().subscribe({
+      next: (items) => {
+        this.organizations = items ?? [];
+        const payloadOrgId = this.auth.getJwtPayload()?.organization_id;
+        this.defaultOrganizationId =
+          this.auth.getSelectedOrganizationId() ??
+          (typeof payloadOrgId === 'number' ? payloadOrgId : null);
+      },
+      error: () => {
+        this.organizations = [];
+      },
+    });
+  }
+
   goToPage(page: number): void {
     if (page < 1) return;
     const maxPage = Math.max(1, Math.ceil(this.total() / this.pageSize));
@@ -606,6 +691,7 @@ export class BranchesListComponent implements OnInit {
 
   emptyForm() {
     return {
+      organizationId: null as number | null,
       clinicId: null as number | null,
       laboratoryId: null as number | null,
       code: '',
