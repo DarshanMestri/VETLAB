@@ -249,13 +249,13 @@ type Species = { id: number; name: string };
               <td>{{ unitById(p.unitId)?.symbol || '-' }}</td>
               <td>{{ p.sortOrder }}</td>
               <td class="text-end">
-                <button class="btn btn-sm btn-outline-info me-1" (click)="openRanges(p)">
+                <button type="button" class="btn btn-sm btn-outline-info me-1" (click)="openRanges(p)">
                   Ranges
                 </button>
-                <button class="btn btn-sm btn-outline-primary me-1" (click)="editParam(p)">
+                <button type="button" class="btn btn-sm btn-outline-primary me-1" (click)="editParam(p)">
                   Edit
                 </button>
-                <button class="btn btn-sm btn-outline-danger" (click)="deleteParam(p)">
+                <button type="button" class="btn btn-sm btn-outline-danger" (click)="deleteParam(p)">
                   Delete
                 </button>
               </td>
@@ -336,8 +336,8 @@ type Species = { id: number; name: string };
               <td>{{ r.high ?? '-' }}</td>
               <td>{{ r.note || '-' }}</td>
               <td class="text-end">
-                <button class="btn btn-sm btn-outline-primary me-1" (click)="editRange(r)">Edit</button>
-                <button class="btn btn-sm btn-outline-danger" (click)="deleteRange(r)">Delete</button>
+                <button type="button" class="btn btn-sm btn-outline-primary me-1" (click)="editRange(r)">Edit</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" (click)="deleteRange(r)">Delete</button>
               </td>
             </tr>
           </tbody>

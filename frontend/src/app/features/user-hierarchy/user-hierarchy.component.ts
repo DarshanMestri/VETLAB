@@ -177,7 +177,7 @@ type LoginFilter = 'all' | 'success' | 'failed';
   styles: [
     `
       .tree-root {
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--color-border);
         border-radius: 0.5rem;
         padding: 0.75rem;
       }
@@ -191,33 +191,33 @@ type LoginFilter = 'all' | 'success' | 'failed';
       }
 
       .tree-row.root {
-        background: #f1f5f9;
-        border-left: 4px solid #2563eb;
+        background: var(--color-tint);
+        border-left: 4px solid var(--color-primary-dark);
         margin-bottom: 0.35rem;
       }
 
       .tree-row.lab {
-        background: #eff6ff;
-        border-left: 4px solid #3b82f6;
+        background: rgba(102, 198, 216, 0.14);
+        border-left: 4px solid var(--color-secondary);
         margin-bottom: 0.25rem;
       }
 
       .tree-row.branch {
-        background: #f8fafc;
-        border-left: 4px solid #94a3b8;
+        background: #f7fbfd;
+        border-left: 4px solid #9fb4bf;
       }
 
       .tree-level.branches {
         margin-left: 1.15rem;
         padding-left: 0.65rem;
-        border-left: 1px dashed #cbd5e1;
+        border-left: 1px dashed #c3dbe4;
         margin-bottom: 0.35rem;
       }
 
       .tree-users {
         margin-left: 1.15rem;
         padding-left: 0.65rem;
-        border-left: 1px dashed #cbd5e1;
+        border-left: 1px dashed #c3dbe4;
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
@@ -229,7 +229,7 @@ type LoginFilter = 'all' | 'success' | 'failed';
         align-items: center;
         gap: 0.45rem;
         padding: 0.35rem 0.55rem;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--color-border);
         border-radius: 0.45rem;
         background: #fff;
       }
@@ -238,16 +238,16 @@ type LoginFilter = 'all' | 'success' | 'failed';
         width: 8px;
         height: 8px;
         border-radius: 999px;
-        background: #cbd5e1;
+        background: #c3d2da;
       }
 
       .user-dot.online {
-        background: #22c55e;
-        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+        background: var(--color-success);
+        box-shadow: 0 0 0 2px rgba(61, 184, 154, 0.22);
       }
 
       .user-login {
-        color: #64748b;
+        color: var(--color-secondary-text);
       }
 
       .tree-org-icon,

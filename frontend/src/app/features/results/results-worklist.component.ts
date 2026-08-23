@@ -121,7 +121,7 @@ type WorkGroup = {
             <td>
               <div>
                 {{ row.status }}
-                <span *ngIf="row.rerunReason" class="badge bg-orange text-white ms-1" style="background-color:#e67e22">Re-run</span>
+                <span *ngIf="row.rerunReason" class="badge ms-1" style="background-color:rgba(255,148,120,.18);color:#b85c43;font-weight:600">Re-run</span>
               </div>
               <small class="text-muted">Sample: {{ row.sampleStatus }}</small>
             </td>

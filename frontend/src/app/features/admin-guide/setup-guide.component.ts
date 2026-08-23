@@ -103,7 +103,7 @@ interface MappingRow {
     </div>
   `,
   styles: `
-    .hierarchy-flow .arrow { font-size: 1.25rem; color: #6c757d; font-weight: bold; }
+    .hierarchy-flow .arrow { font-size: 1.25rem; color: var(--color-secondary-text); font-weight: bold; }
     .hierarchy-flow .badge { min-width: 110px; }
   `,
 })

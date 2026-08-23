@@ -699,7 +699,7 @@ type CreateDto = {
     .reg-card-title { font-weight: 600; font-size: 1rem; color: var(--color-main-text); margin-bottom: 0.15rem; }
     .reg-card-desc { font-size: 0.8rem; color: var(--color-secondary-text); margin-bottom: 0.75rem; }
     .species-group { border: 1px solid var(--color-border); border-radius: 0.5rem; overflow: hidden; }
-    .species-group-header { background: #f0fdfa; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--color-border); }
+    .species-group-header { background: var(--color-tint); padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--color-border); }
     .species-group-body { padding: 0.75rem; }
     .species-label { color: var(--color-primary); font-weight: 600; }
     .summary-label { font-size: 0.75rem; color: var(--color-secondary-text); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.1rem; }
@@ -707,7 +707,7 @@ type CreateDto = {
     .summary-value-last { font-weight: 600; color: var(--color-main-text); }
     .owner-results { position: absolute; z-index: 10; background: white; border: 1px solid var(--color-border); border-radius: 0.375rem; width: 100%; max-height: 320px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 2px; }
     .owner-result-item { display: flex; gap: 0.5rem; align-items: center; width: 100%; padding: 0.5rem 0.75rem; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.875rem; }
-    .owner-result-item:hover { background: #f1f5f9; }
+    .owner-result-item:hover { background: var(--color-tint); }
     .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1040; }
     .modal { z-index: 1050; }
   `],

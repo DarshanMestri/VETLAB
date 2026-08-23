@@ -371,7 +371,7 @@ interface UserForm {
       }
       .eyebrow {
         margin: 0 0 0.25rem;
-        color: #087f5b;
+        color: var(--color-primary-dark);
         font-size: 0.72rem;
         font-weight: 700;
         letter-spacing: 0;
@@ -379,13 +379,13 @@ interface UserForm {
       }
       h1 {
         margin: 0;
-        color: #17212b;
+        color: var(--color-main-text);
         font-size: 1.75rem;
         font-weight: 700;
       }
       .subtitle {
         margin: 0.3rem 0 0;
-        color: #637180;
+        color: var(--color-secondary-text);
       }
       .workspace {
         display: grid;
@@ -395,10 +395,10 @@ interface UserForm {
       }
       .user-list,
       .create-panel {
-        border: 1px solid #dce2e7;
+        border: 1px solid var(--color-border);
         border-radius: 6px;
         background: #fff;
-        box-shadow: 0 2px 8px rgba(23, 33, 43, 0.05);
+        box-shadow: 0 2px 8px rgba(90, 160, 185, 0.07);
       }
       .section-toolbar {
         display: flex;
@@ -406,16 +406,16 @@ interface UserForm {
         justify-content: space-between;
         gap: 1rem;
         padding: 1rem 1.15rem;
-        border-bottom: 1px solid #e8ecef;
+        border-bottom: 1px solid var(--color-border);
       }
       h2 {
         margin: 0;
-        color: #24313d;
+        color: var(--color-main-text);
         font-size: 1rem;
         font-weight: 700;
       }
       .count {
-        color: #74808c;
+        color: var(--color-secondary-text);
         font-size: 0.78rem;
       }
       .search-field {
@@ -426,8 +426,8 @@ interface UserForm {
       }
       .table th {
         padding: 0.7rem 1rem;
-        color: #65717d;
-        background: #f7f9fa;
+        color: var(--color-secondary-text);
+        background: var(--color-tint);
         border-bottom-width: 1px;
         font-size: 0.72rem;
         text-transform: uppercase;
@@ -436,7 +436,7 @@ interface UserForm {
       }
       .table td {
         padding: 0.8rem 1rem;
-        color: #35424e;
+        color: var(--color-main-text);
         font-size: 0.86rem;
       }
       .table td strong,
@@ -445,23 +445,23 @@ interface UserForm {
       }
       .table td small {
         margin-top: 0.18rem;
-        color: #7a8793;
+        color: var(--color-secondary-text);
         font-size: 0.74rem;
       }
       .role-tag {
         display: inline-block;
         padding: 0.2rem 0.45rem;
-        color: #365267;
-        border: 1px solid #cbd7df;
+        color: #3d87a3;
+        border: 1px solid var(--color-light-cyan);
         border-radius: 4px;
-        background: #f5f8fa;
+        background: var(--color-tint);
         font-size: 0.74rem;
       }
       .status {
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        color: #8b3d3d;
+        color: #b05252;
         font-size: 0.78rem;
         font-weight: 600;
       }
@@ -470,26 +470,26 @@ interface UserForm {
         height: 7px;
         content: '';
         border-radius: 50%;
-        background: #cf5b5b;
+        background: var(--color-danger);
       }
       .status-active {
-        color: #176b4d;
+        color: #25775f;
       }
       .status-active::before {
-        background: #2c9b70;
+        background: var(--color-success);
       }
       .empty-state {
         padding: 2.5rem !important;
-        color: #77838e !important;
+        color: var(--color-secondary-text) !important;
         text-align: center;
       }
       .panel-heading {
         padding: 1rem 1.15rem;
-        border-bottom: 1px solid #e8ecef;
+        border-bottom: 1px solid var(--color-border);
       }
       .panel-heading p {
         margin: 0.3rem 0 0;
-        color: #74808c;
+        color: var(--color-secondary-text);
         font-size: 0.82rem;
       }
       form {
@@ -505,7 +505,7 @@ interface UserForm {
       }
       .form-label {
         margin: 0;
-        color: #4c5965;
+        color: #5f6873;
         font-size: 0.78rem;
         font-weight: 600;
       }
@@ -518,7 +518,7 @@ interface UserForm {
       .field-note {
         display: block;
         margin-top: 0.3rem;
-        color: #7b8792;
+        color: var(--color-secondary-text);
         font-size: 0.7rem;
         font-weight: 400;
       }
@@ -528,28 +528,28 @@ interface UserForm {
         align-items: flex-start;
         margin: 1.1rem 0;
         padding: 0.8rem;
-        border: 1px solid #dfe6e9;
+        border: 1px solid var(--color-border);
         border-radius: 5px;
-        background: #f8faf9;
+        background: #f7fbfd;
         cursor: pointer;
       }
       .active-control input {
         width: 17px;
         height: 17px;
         margin-top: 0.1rem;
-        accent-color: #087f5b;
+        accent-color: var(--color-primary-dark);
       }
       .active-control strong,
       .active-control small {
         display: block;
       }
       .active-control strong {
-        color: #34414c;
+        color: var(--color-main-text);
         font-size: 0.82rem;
       }
       .active-control small {
         margin-top: 0.18rem;
-        color: #75818c;
+        color: var(--color-secondary-text);
         font-size: 0.72rem;
       }
       .form-actions {
@@ -557,16 +557,16 @@ interface UserForm {
         justify-content: flex-end;
         gap: 0.65rem;
         padding-top: 1rem;
-        border-top: 1px solid #e8ecef;
+        border-top: 1px solid var(--color-border);
       }
       .btn-primary {
-        border-color: #087f5b;
-        background: #087f5b;
+        border-color: var(--color-primary);
+        background: var(--color-primary);
       }
       .btn-primary:hover,
       .btn-primary:focus {
-        border-color: #066b4c;
-        background: #066b4c;
+        border-color: var(--color-primary-dark);
+        background: var(--color-primary-dark);
       }
       @media (max-width: 1100px) {
         .workspace {
@@ -598,9 +598,9 @@ interface UserForm {
       .branch-access {
         margin-top: 0.9rem;
         padding: 0.85rem 1rem;
-        border: 1px solid #dce2e7;
+        border: 1px solid var(--color-border);
         border-radius: 6px;
-        background: #f8fafb;
+        background: #f7fbfd;
       }
       .ba-head {
         display: flex;
@@ -610,12 +610,12 @@ interface UserForm {
       }
       .ba-head strong {
         font-size: 0.88rem;
-        color: #24313d;
+        color: var(--color-main-text);
       }
       .ba-count {
         font-size: 0.72rem;
-        color: #087f5b;
-        background: rgba(8, 127, 91, 0.1);
+        color: var(--color-primary-dark);
+        background: rgba(95, 175, 203, 0.14);
         padding: 0.15rem 0.55rem;
         border-radius: 999px;
         white-space: nowrap;
@@ -624,7 +624,7 @@ interface UserForm {
         display: block;
         margin: 0.2rem 0 0.6rem;
         font-size: 0.72rem;
-        color: #74808c;
+        color: var(--color-secondary-text);
       }
       .ba-search {
         max-width: 320px;
@@ -640,25 +640,25 @@ interface UserForm {
         align-items: center;
         gap: 0.35rem;
         padding: 0.28rem 0.7rem;
-        border: 1px solid #cfd7dd;
+        border: 1px solid var(--color-border);
         border-radius: 999px;
         background: #fff;
         font-size: 0.78rem;
-        color: #35424e;
+        color: var(--color-main-text);
         cursor: pointer;
         user-select: none;
       }
       .ba-chip:hover {
-        border-color: #087f5b;
+        border-color: var(--color-primary);
       }
       .ba-chip-on {
-        border-color: #087f5b;
-        background: rgba(8, 127, 91, 0.08);
-        color: #066b4c;
+        border-color: var(--color-primary);
+        background: rgba(95, 175, 203, 0.12);
+        color: #3d87a3;
         font-weight: 600;
       }
       .ba-group {
-        border: 1px solid #e4e9ec;
+        border: 1px solid var(--color-border);
         border-radius: 6px;
         background: #fff;
         overflow: hidden;
@@ -673,7 +673,7 @@ interface UserForm {
         align-items: center;
         gap: 0.5rem;
         padding: 0.45rem 0.7rem;
-        background: #eef2f4;
+        background: var(--color-tint);
         cursor: pointer;
         user-select: none;
       }
@@ -681,12 +681,12 @@ interface UserForm {
         font-size: 0.76rem;
         text-transform: uppercase;
         letter-spacing: 0.03em;
-        color: #51606d;
+        color: #5f6873;
       }
       .ba-group-count {
         margin-left: auto;
         font-size: 0.72rem;
-        color: #74808c;
+        color: var(--color-secondary-text);
       }
       .ba-branches {
         display: grid;
@@ -703,21 +703,21 @@ interface UserForm {
         cursor: pointer;
       }
       .ba-branch:hover {
-        background: #f2f6f4;
+        background: #f2fafc;
       }
       .ba-branch-on {
-        background: rgba(8, 127, 91, 0.07);
+        background: rgba(95, 175, 203, 0.1);
       }
       .ba-branch span strong {
         display: block;
         font-size: 0.8rem;
-        color: #2a3641;
+        color: var(--color-main-text);
         line-height: 1.25;
       }
       .ba-branch span small {
         display: block;
         font-size: 0.68rem;
-        color: #8592a0;
+        color: var(--color-secondary-text);
       }
     `,
   ],

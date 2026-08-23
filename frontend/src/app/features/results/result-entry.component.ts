@@ -91,7 +91,7 @@ type Detail = {
               }">
               {{ detail.status }}
             </span>
-            <span *ngIf="detail.rerunReason" class="badge bg-orange text-white ms-2" style="background-color:#e67e22">
+            <span *ngIf="detail.rerunReason" class="badge ms-2" style="background-color:rgba(255,148,120,.18);color:#b85c43;font-weight:600">
               Re-run
             </span>
           </div>

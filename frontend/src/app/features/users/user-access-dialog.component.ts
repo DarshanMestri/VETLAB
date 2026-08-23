@@ -196,7 +196,7 @@ interface OrgGroup {
         flex-direction: column;
         background: #fff;
         border-radius: 10px;
-        box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+        box-shadow: 0 24px 64px rgba(70, 81, 92, 0.28);
         overflow: hidden;
       }
       .ua-header {
@@ -204,28 +204,28 @@ interface OrgGroup {
         align-items: flex-start;
         justify-content: space-between;
         padding: 1rem 1.15rem 0.75rem;
-        border-bottom: 1px solid #e8ecef;
+        border-bottom: 1px solid var(--color-border);
       }
       .ua-header h3 {
         margin: 0;
         font-size: 1.05rem;
-        color: #17212b;
+        color: var(--color-main-text);
       }
       .ua-header p {
         margin: 0.2rem 0 0;
         font-size: 0.78rem;
-        color: #74808c;
+        color: var(--color-secondary-text);
       }
       .ua-close {
         border: none;
         background: none;
         font-size: 1.5rem;
         line-height: 1;
-        color: #64748b;
+        color: var(--color-secondary-text);
         cursor: pointer;
       }
       .ua-close:hover {
-        color: #0f172a;
+        color: var(--color-main-text);
       }
       .ua-note {
         margin: 0.75rem 1.15rem 0;
@@ -240,7 +240,7 @@ interface OrgGroup {
       .ua-count {
         white-space: nowrap;
         font-size: 0.75rem;
-        color: #74808c;
+        color: var(--color-secondary-text);
       }
       .ua-body {
         overflow-y: auto;
@@ -250,15 +250,15 @@ interface OrgGroup {
       table td strong {
         display: block;
         font-size: 0.86rem;
-        color: #35424e;
+        color: var(--color-main-text);
       }
       table td small {
         display: block;
         font-size: 0.72rem;
-        color: #7a8793;
+        color: var(--color-secondary-text);
       }
       tr.org-row td {
-        background: #f4f6f8;
+        background: var(--color-tint);
         position: sticky;
         top: 0;
       }
@@ -266,7 +266,7 @@ interface OrgGroup {
         font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.03em;
-        color: #51606d;
+        color: #5f6873;
       }
       tr.org-row td small {
         margin-left: 0.5rem;
@@ -281,23 +281,23 @@ interface OrgGroup {
         justify-content: space-between;
         gap: 1rem;
         padding: 0.8rem 1.15rem;
-        border-top: 1px solid #e8ecef;
+        border-top: 1px solid var(--color-border);
       }
       .hint {
         font-size: 0.7rem;
-        color: #94a3b8;
+        color: var(--color-secondary-text);
       }
       .actions {
         display: flex;
         gap: 0.5rem;
       }
       .btn-primary {
-        border-color: #087f5b;
-        background: #087f5b;
+        border-color: var(--color-primary);
+        background: var(--color-primary);
       }
       .btn-primary:hover {
-        border-color: #066b4c;
-        background: #066b4c;
+        border-color: var(--color-primary-dark);
+        background: var(--color-primary-dark);
       }
     `,
   ],

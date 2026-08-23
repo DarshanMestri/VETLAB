@@ -98,8 +98,8 @@ import { AuthService, BranchOption } from '../core/auth.service';
         gap: 1rem;
         padding: 0.45rem 1rem;
         background: #fff;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+        border-bottom: 1px solid var(--color-border);
+        box-shadow: 0 1px 4px rgba(90, 160, 185, 0.06);
       }
 
       .ctx-left {
@@ -115,7 +115,7 @@ import { AuthService, BranchOption } from '../core/auth.service';
         gap: 0.4rem;
         font-size: 0.85rem;
         font-weight: 600;
-        color: #334155;
+        color: var(--color-main-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -124,7 +124,7 @@ import { AuthService, BranchOption } from '../core/auth.service';
       .org-chip svg {
         width: 16px;
         height: 16px;
-        color: #6d28d9;
+        color: var(--color-primary-dark);
         flex-shrink: 0;
       }
 
@@ -136,26 +136,29 @@ import { AuthService, BranchOption } from '../core/auth.service';
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        border: 1px solid rgba(15, 23, 42, 0.14);
-        background: #f8fafc;
+        border: 1px solid var(--color-border);
+        background: #f7fbfd;
         border-radius: 999px;
         padding: 0.28rem 0.75rem;
         font-size: 0.82rem;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--color-main-text);
         cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease;
       }
 
       .branch-btn:hover,
       .branch-btn.open {
-        border-color: #6d28d9;
-        background: #faf5ff;
+        border-color: var(--color-primary);
+        background: var(--color-tint);
       }
 
       .branch-btn svg {
         width: 15px;
         height: 15px;
-        color: #6d28d9;
+        color: var(--color-primary-dark);
       }
 
       .caret {
@@ -172,9 +175,9 @@ import { AuthService, BranchOption } from '../core/auth.service';
         left: 0;
         min-width: 260px;
         background: #fff;
-        border: 1px solid rgba(15, 23, 42, 0.1);
+        border: 1px solid var(--color-border);
         border-radius: 12px;
-        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+        box-shadow: 0 12px 32px rgba(90, 160, 185, 0.18);
         padding: 0.35rem;
         z-index: 1050;
       }
@@ -184,7 +187,7 @@ import { AuthService, BranchOption } from '../core/auth.service';
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #94a3b8;
+        color: var(--color-secondary-text);
         padding: 0.35rem 0.55rem;
       }
 
@@ -203,11 +206,11 @@ import { AuthService, BranchOption } from '../core/auth.service';
       }
 
       .menu-item:hover:not(:disabled):not(.current) {
-        background: #f5f3ff;
+        background: var(--color-tint);
       }
 
       .menu-item.current {
-        background: #f5f3ff;
+        background: var(--color-tint);
       }
 
       .menu-item:disabled {
@@ -222,17 +225,17 @@ import { AuthService, BranchOption } from '../core/auth.service';
 
         strong {
           font-size: 0.86rem;
-          color: #0f172a;
+          color: var(--color-main-text);
         }
 
         small {
           font-size: 0.74rem;
-          color: #64748b;
+          color: var(--color-secondary-text);
         }
       }
 
       .mi-check {
-        color: #6d28d9;
+        color: var(--color-success);
         font-weight: 700;
       }
 
@@ -248,7 +251,7 @@ import { AuthService, BranchOption } from '../core/auth.service';
         gap: 0.45rem;
         font-size: 0.83rem;
         font-weight: 600;
-        color: #334155;
+        color: var(--color-main-text);
         white-space: nowrap;
       }
 
@@ -258,7 +261,7 @@ import { AuthService, BranchOption } from '../core/auth.service';
         width: 26px;
         height: 26px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #7c3aed, #4f46e5);
+        background: linear-gradient(135deg, #5fafcb, #66c6d8);
         color: #fff;
         font-size: 0.72rem;
         font-weight: 700;
@@ -269,16 +272,19 @@ import { AuthService, BranchOption } from '../core/auth.service';
         place-items: center;
         width: 30px;
         height: 30px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
+        border: 1px solid rgba(233, 121, 121, 0.35);
         border-radius: 8px;
         background: #fff;
-        color: #ef4444;
+        color: #d36565;
         cursor: pointer;
+        transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease;
       }
 
       .logout-btn:hover {
-        background: #fef2f2;
-        border-color: #fecaca;
+        background: rgba(233, 121, 121, 0.12);
+        border-color: rgba(233, 121, 121, 0.5);
       }
 
       .logout-btn svg {

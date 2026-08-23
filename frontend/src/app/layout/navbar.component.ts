@@ -69,7 +69,6 @@ const NAV_GROUPS: NavGroup[] = [
     children: [
       { label: 'Clients', route: '/clients', roles: ['Admin', 'Manager'], icon: ICONS.briefcase },
       { label: 'Owners & Animals', route: '/owners', icon: ICONS.heart },
-      { label: 'Species', route: '/species', roles: ['Admin', 'Manager'], icon: ICONS.paw },
       { label: 'Registrations', route: '/registrations', icon: ICONS.clipboard },
     ],
   },
@@ -271,7 +270,7 @@ const NAV_GROUPS: NavGroup[] = [
   `,
   styles: [
     `
-      /* Navy sidebar theme (matches login page) */
+      /* Light airy sidebar (matches login page) */
       .app-sidebar {
         position: fixed;
         inset: 0 auto 0 0;
@@ -280,10 +279,10 @@ const NAV_GROUPS: NavGroup[] = [
         flex-direction: column;
         width: 264px;
         padding: 1.1rem 0.9rem 0.9rem;
-        color: #fff;
-        background: linear-gradient(180deg, #0a1f44 0%, #0c2b5c 100%);
-        box-shadow: 0 0 2.5rem rgba(2, 8, 23, 0.45);
-        border-right: 1px solid rgba(147, 197, 253, 0.12);
+        color: var(--color-main-text);
+        background: var(--color-sidebar);
+        box-shadow: 0 0 2rem rgba(90, 160, 185, 0.09);
+        border-right: 1px solid var(--color-border);
         transition: transform 0.28s ease;
       }
 
@@ -293,7 +292,7 @@ const NAV_GROUPS: NavGroup[] = [
         justify-content: space-between;
         gap: 0.5rem;
         padding: 0.25rem 0.4rem 1rem;
-        border-bottom: 1px solid rgba(147, 197, 253, 0.14);
+        border-bottom: 1px solid var(--color-border);
       }
 
       .brand {
@@ -301,7 +300,7 @@ const NAV_GROUPS: NavGroup[] = [
         align-items: center;
         gap: 0.7rem;
         min-width: 0;
-        color: #fff;
+        color: var(--color-main-text);
         text-decoration: none;
       }
 
@@ -311,11 +310,10 @@ const NAV_GROUPS: NavGroup[] = [
         width: 40px;
         height: 40px;
         place-items: center;
-        color: #e0f2fe;
-        border: 1px solid rgba(147, 197, 253, 0.4);
+        color: #fff;
         border-radius: 11px;
-        background: linear-gradient(135deg, #2563eb, #1e40af);
-        box-shadow: 0 6px 14px -6px rgba(37, 99, 235, 0.8);
+        background: linear-gradient(135deg, #5fafcb, #66c6d8);
+        box-shadow: 0 6px 14px -6px rgba(95, 175, 203, 0.7);
 
         svg {
           width: 19px;
@@ -332,12 +330,13 @@ const NAV_GROUPS: NavGroup[] = [
         strong {
           font-size: 1.02rem;
           letter-spacing: 0.01em;
+          color: var(--color-main-text);
         }
 
         small {
           margin-top: 0.18rem;
           overflow: hidden;
-          color: rgba(191, 219, 254, 0.6);
+          color: var(--color-secondary-text);
           font-size: 0.66rem;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -351,10 +350,10 @@ const NAV_GROUPS: NavGroup[] = [
         width: 32px;
         height: 32px;
         padding: 0;
-        border: 1px solid rgba(147, 197, 253, 0.25);
+        border: 1px solid var(--color-border);
         border-radius: 8px;
-        color: #bfdbfe;
-        background: rgba(255, 255, 255, 0.06);
+        color: var(--color-secondary-text);
+        background: transparent;
         cursor: pointer;
         transition:
           background-color 0.2s ease,
@@ -367,9 +366,9 @@ const NAV_GROUPS: NavGroup[] = [
         }
 
         &:hover {
-          color: #fff;
-          border-color: rgba(147, 197, 253, 0.5);
-          background: rgba(59, 130, 246, 0.25);
+          color: var(--color-primary-dark);
+          border-color: var(--color-light-cyan);
+          background: var(--color-tint);
         }
       }
 
@@ -390,7 +389,7 @@ const NAV_GROUPS: NavGroup[] = [
 
         &::-webkit-scrollbar-thumb {
           border-radius: 999px;
-          background: rgba(147, 197, 253, 0.2);
+          background: rgba(95, 175, 203, 0.25);
         }
       }
 
@@ -408,7 +407,7 @@ const NAV_GROUPS: NavGroup[] = [
         border: none;
         border-left: 3px solid transparent;
         border-radius: 0.4rem;
-        color: rgba(226, 240, 255, 0.78);
+        color: rgba(95, 104, 115, 0.85);
         background: transparent;
         font-size: 0.9rem;
         font-weight: 600;
@@ -420,12 +419,12 @@ const NAV_GROUPS: NavGroup[] = [
           border-color 0.18s ease;
 
         &:hover {
-          color: #fff;
-          background: rgba(59, 130, 246, 0.16);
+          color: var(--color-main-text);
+          background: var(--color-tint);
         }
 
         &:focus-visible {
-          outline: 2px solid #60a5fa;
+          outline: 2px solid var(--color-cyan);
           outline-offset: -2px;
         }
       }
@@ -436,7 +435,7 @@ const NAV_GROUPS: NavGroup[] = [
         width: 20px;
         height: 20px;
         place-items: center;
-        color: #93c5fd;
+        color: var(--color-primary-dark);
 
         svg {
           width: 19px;
@@ -456,7 +455,7 @@ const NAV_GROUPS: NavGroup[] = [
         display: grid;
         flex: 0 0 16px;
         place-items: center;
-        color: rgba(191, 219, 254, 0.55);
+        color: rgba(138, 148, 158, 0.6);
         transition: transform 0.28s ease;
 
         svg {
@@ -491,7 +490,7 @@ const NAV_GROUPS: NavGroup[] = [
         gap: 0.6rem;
         padding: 0.48rem 0.7rem 0.48rem 2.35rem;
         margin: 0 0 0.1rem;
-        color: rgba(219, 234, 254, 0.7);
+        color: rgba(95, 104, 115, 0.8);
         border-left: 3px solid transparent;
         border-radius: 0.4rem;
         font-size: 0.87rem;
@@ -502,14 +501,15 @@ const NAV_GROUPS: NavGroup[] = [
           border-color 0.16s ease;
 
         &:hover {
-          color: #fff;
-          background: rgba(59, 130, 246, 0.14);
+          color: var(--color-main-text);
+          background: #f2fafc;
         }
 
         &.active {
-          color: #fff;
-          border-left-color: #60a5fa;
-          background: rgba(37, 99, 235, 0.32);
+          color: #3d87a3;
+          font-weight: 600;
+          border-left-color: var(--color-active-menu);
+          background: var(--color-tint);
         }
       }
 
@@ -517,7 +517,7 @@ const NAV_GROUPS: NavGroup[] = [
         display: grid;
         flex: 0 0 16px;
         place-items: center;
-        color: rgba(147, 197, 253, 0.6);
+        color: rgba(74, 159, 190, 0.75);
 
         svg {
           width: 16px;
@@ -531,10 +531,10 @@ const NAV_GROUPS: NavGroup[] = [
         width: 16px;
         height: 16px;
         place-items: center;
-        color: #dbeafe;
-        border: 1px solid rgba(147, 197, 253, 0.45);
+        color: var(--color-primary-dark);
+        border: 1px solid rgba(95, 175, 203, 0.45);
         border-radius: 999px;
-        background: rgba(37, 99, 235, 0.4);
+        background: rgba(95, 175, 203, 0.12);
         font-size: 0.62rem;
         font-weight: 700;
         line-height: 1;
@@ -542,12 +542,12 @@ const NAV_GROUPS: NavGroup[] = [
 
       .nav-link.active .child-step {
         color: #fff;
-        border-color: #60a5fa;
-        background: rgba(37, 99, 235, 0.7);
+        border-color: var(--color-active-menu);
+        background: var(--color-active-menu);
       }
 
       .nav-link.active .child-icon {
-        color: #bfdbfe;
+        color: var(--color-primary-dark);
       }
 
       .child-label {
@@ -560,7 +560,7 @@ const NAV_GROUPS: NavGroup[] = [
       /* Footer */
       .sidebar-footer {
         padding: 0.9rem 0.4rem 0;
-        border-top: 1px solid rgba(147, 197, 253, 0.14);
+        border-top: 1px solid var(--color-border);
       }
 
       .user-card {
@@ -569,9 +569,9 @@ const NAV_GROUPS: NavGroup[] = [
         gap: 0.4rem;
         margin-bottom: 0.65rem;
         padding: 0.7rem 0.6rem;
-        border: 1px solid rgba(147, 197, 253, 0.16);
+        border: 1px solid var(--color-border);
         border-radius: 0.55rem;
-        background: rgba(255, 255, 255, 0.04);
+        background: #f7fbfd;
       }
 
       .uc-top {
@@ -588,9 +588,8 @@ const NAV_GROUPS: NavGroup[] = [
         width: 28px;
         height: 28px;
         color: #fff;
-        border: 1px solid rgba(147, 197, 253, 0.4);
         border-radius: 50%;
-        background: linear-gradient(135deg, #2563eb, #1e40af);
+        background: linear-gradient(135deg, #5fafcb, #66c6d8);
         font-size: 0.75rem;
         font-weight: 700;
       }
@@ -598,7 +597,7 @@ const NAV_GROUPS: NavGroup[] = [
       .uc-name {
         min-width: 0;
         overflow: hidden;
-        color: #fff;
+        color: var(--color-main-text);
         font-size: 0.86rem;
         font-weight: 600;
         text-overflow: ellipsis;
@@ -618,7 +617,7 @@ const NAV_GROUPS: NavGroup[] = [
         flex: 0 0 16px;
         width: 16px;
         height: 16px;
-        color: #93c5fd;
+        color: var(--color-primary-dark);
 
         svg {
           width: 13px;
@@ -629,7 +628,7 @@ const NAV_GROUPS: NavGroup[] = [
       .uc-text {
         min-width: 0;
         overflow: hidden;
-        color: rgba(219, 234, 254, 0.72);
+        color: var(--color-secondary-text);
         font-size: 0.72rem;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -640,21 +639,23 @@ const NAV_GROUPS: NavGroup[] = [
         display: block;
         width: 100%;
         padding: 0.5rem 0.7rem;
-        color: #bfdbfe;
-        border: 1px solid rgba(147, 197, 253, 0.35);
+        color: var(--color-primary-dark);
+        border: 1px solid var(--color-border);
         border-radius: 0.45rem;
         background: transparent;
         text-align: center;
         text-decoration: none;
         transition:
           background-color 0.2s ease,
-          color 0.2s ease;
+          color 0.2s ease,
+          border-color 0.2s ease;
       }
 
       .logout-button:hover,
       .login-button:hover {
-        color: #fff;
-        background: rgba(37, 99, 235, 0.35);
+        color: #3d87a3;
+        border-color: var(--color-light-cyan);
+        background: var(--color-tint);
       }
 
       /* Desktop: hamburger shows only when collapsed (body.sidebar-collapsed rules live in styles.css) */
@@ -666,7 +667,7 @@ const NAV_GROUPS: NavGroup[] = [
       @media (max-width: 991.98px) {
         .app-sidebar {
           transform: translateX(-100%);
-          box-shadow: 0 0 3rem rgba(2, 8, 23, 0.5);
+          box-shadow: 0 0 3rem rgba(70, 81, 92, 0.25);
         }
 
         .app-sidebar.is-open {
@@ -685,15 +686,15 @@ const NAV_GROUPS: NavGroup[] = [
           position: fixed;
           top: 0.85rem;
           left: 0.85rem;
-          z-index: 1030;
+          z-index: 1037;
           display: block;
           width: 42px;
           height: 38px;
-          border: 0;
+          border: 1px solid var(--color-border);
           border-radius: 0.45rem;
-          color: #fff;
-          background: #0a1f44;
-          box-shadow: 0 8px 20px -8px rgba(2, 8, 23, 0.55);
+          color: var(--color-primary-dark);
+          background: var(--color-card-background);
+          box-shadow: 0 8px 20px -10px rgba(90, 160, 185, 0.35);
           cursor: pointer;
 
           span {
@@ -701,7 +702,8 @@ const NAV_GROUPS: NavGroup[] = [
             width: 19px;
             height: 2px;
             margin: 4px auto;
-            background: #e0f2fe;
+            border-radius: 2px;
+            background: var(--color-primary-dark);
           }
         }
 
@@ -710,7 +712,7 @@ const NAV_GROUPS: NavGroup[] = [
           inset: 0;
           z-index: 1035;
           display: block;
-          background: rgba(2, 8, 23, 0.55);
+          background: rgba(70, 81, 92, 0.45);
         }
       }
     `,

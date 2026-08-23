@@ -1,39 +1,50 @@
-/* Shared application palette */
+/* Shared application palette — soft medical blue/cyan (matches login page) */
 @import url('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css');
 
 :root {
-  --color-primary: #0f766e;
-  --color-primary-dark: #115e59;
-  --color-secondary: #2563eb;
-  --color-accent: #16a34a;
-  --color-sidebar: #0a1f44;
-  --color-sidebar-hover: #123a75;
-  --color-active-menu: #2563eb;
-  --color-page-background: #f8fafc;
+  --color-primary: #5fafcb;
+  --color-primary-dark: #4a9fbe;
+  --color-secondary: #66c6d8;
+  --color-accent: #3db89a;
+  --color-sidebar: #ffffff;
+  --color-sidebar-hover: #eaf7fb;
+  --color-active-menu: #5fafcb;
+  --color-page-background: #f2fafc;
   --color-card-background: #ffffff;
-  --color-main-text: #1e293b;
-  --color-secondary-text: #64748b;
-  --color-border: #e2e8f0;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-info: #0284c7;
+  --color-main-text: #46515c;
+  --color-secondary-text: #8a949e;
+  --color-border: #ddecef;
+  --color-success: #3db89a;
+  --color-warning: #f0a35e;
+  --color-danger: #e97979;
+  --color-info: #4a9fbe;
+
+  /* Login-page companions */
+  --color-cyan: #66c6d8;
+  --color-light-cyan: #bfe8f1;
+  --color-tint: #eaf7fb;
+  --color-shadow-soft: rgba(90, 160, 185, 0.1);
+  --color-focus-ring: rgba(102, 198, 216, 0.25);
 
   --bs-primary: var(--color-primary);
-  --bs-primary-rgb: 15, 118, 110;
+  --bs-primary-rgb: 95, 175, 203;
   --bs-secondary: var(--color-secondary);
-  --bs-secondary-rgb: 37, 99, 235;
+  --bs-secondary-rgb: 102, 198, 216;
   --bs-success: var(--color-success);
-  --bs-success-rgb: 22, 163, 74;
+  --bs-success-rgb: 61, 184, 154;
   --bs-warning: var(--color-warning);
-  --bs-warning-rgb: 217, 119, 6;
+  --bs-warning-rgb: 240, 163, 94;
   --bs-danger: var(--color-danger);
-  --bs-danger-rgb: 220, 38, 38;
+  --bs-danger-rgb: 233, 121, 121;
   --bs-info: var(--color-info);
-  --bs-info-rgb: 2, 132, 199;
+  --bs-info-rgb: 74, 159, 190;
   --bs-body-color: var(--color-main-text);
   --bs-body-bg: var(--color-page-background);
   --bs-border-color: var(--color-border);
+
+  /* Bootstrap component variables (CDN build can't be recompiled) */
+  --bs-link-color: var(--color-primary-dark);
+  --bs-link-hover-color: #3d87a3;
 }
 
 html,
@@ -45,6 +56,7 @@ app-root {
 body {
   margin: 0;
   font-family:
+    'Inter',
     system-ui,
     -apple-system,
     'Segoe UI',
@@ -64,7 +76,9 @@ body {
   margin-left: 264px;
   padding-right: 2rem;
   padding-left: 2rem;
-  transition: margin-left 0.28s ease;
+  transition:
+    margin-left 0.28s ease,
+    background-color 0.28s ease;
 }
 
 @media (min-width: 992px) {
@@ -76,15 +90,15 @@ body {
     position: fixed;
     top: 0.9rem;
     left: 0.9rem;
-    z-index: 1030;
+    z-index: 1037;
     display: block;
     width: 42px;
     height: 38px;
-    border: 0;
+    border: 1px solid var(--color-border);
     border-radius: 0.45rem;
-    color: #fff;
-    background: #0a1f44;
-    box-shadow: 0 8px 20px -8px rgba(2, 8, 23, 0.6);
+    color: var(--color-primary-dark);
+    background: var(--color-card-background);
+    box-shadow: 0 8px 20px -10px var(--color-shadow-soft);
     cursor: pointer;
   }
 
@@ -93,7 +107,8 @@ body {
     width: 19px;
     height: 2px;
     margin: 4px auto;
-    background: #e0f2fe;
+    border-radius: 2px;
+    background: var(--color-primary-dark);
   }
 
   body.sidebar-collapsed .app-sidebar {
@@ -113,8 +128,255 @@ body {
 .card {
   background-color: var(--color-card-background);
   border-color: var(--color-border);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(90, 160, 185, 0.07);
+}
+
+.card-header {
+  background-color: var(--color-tint);
+  border-bottom-color: var(--color-border);
+  color: var(--color-main-text);
 }
 
 .text-muted {
   color: var(--color-secondary-text) !important;
+}
+
+/* ---------- Buttons ---------- */
+.btn-primary {
+  --bs-btn-bg: var(--color-primary);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-bg: var(--color-primary-dark);
+  --bs-btn-hover-border-color: var(--color-primary-dark);
+  --bs-btn-active-bg: var(--color-primary-dark);
+  --bs-btn-active-border-color: var(--color-primary-dark);
+  --bs-btn-disabled-bg: var(--color-primary);
+  --bs-btn-disabled-border-color: var(--color-primary);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--color-primary-dark);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--color-primary);
+  --bs-btn-hover-border-color: var(--color-primary);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--color-primary-dark);
+  --bs-btn-active-border-color: var(--color-primary-dark);
+  --bs-btn-disabled-color: var(--color-primary);
+  --bs-btn-disabled-border-color: var(--color-primary);
+}
+
+.btn-success {
+  --bs-btn-bg: var(--color-success);
+  --bs-btn-border-color: var(--color-success);
+  --bs-btn-hover-bg: #34a288;
+  --bs-btn-hover-border-color: #34a288;
+  --bs-btn-active-bg: #2f937c;
+  --bs-btn-active-border-color: #2f937c;
+  --bs-btn-disabled-bg: var(--color-success);
+  --bs-btn-disabled-border-color: var(--color-success);
+}
+
+.btn-outline-success {
+  --bs-btn-color: #2f937c;
+  --bs-btn-border-color: var(--color-success);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--color-success);
+  --bs-btn-hover-border-color: var(--color-success);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #34a288;
+  --bs-btn-active-border-color: #34a288;
+  --bs-btn-disabled-color: var(--color-success);
+  --bs-btn-disabled-border-color: var(--color-success);
+}
+
+.btn-warning {
+  --bs-btn-bg: var(--color-warning);
+  --bs-btn-border-color: var(--color-warning);
+  --bs-btn-hover-bg: #e6944c;
+  --bs-btn-hover-border-color: #e6944c;
+  --bs-btn-active-bg: #d98a44;
+  --bs-btn-active-border-color: #d98a44;
+  --bs-btn-disabled-bg: var(--color-warning);
+  --bs-btn-disabled-border-color: var(--color-warning);
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+}
+
+.btn-outline-warning {
+  --bs-btn-color: #d98a44;
+  --bs-btn-border-color: var(--color-warning);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--color-warning);
+  --bs-btn-hover-border-color: var(--color-warning);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #e6944c;
+  --bs-btn-active-border-color: #e6944c;
+  --bs-btn-disabled-color: var(--color-warning);
+  --bs-btn-disabled-border-color: var(--color-warning);
+}
+
+.btn-danger {
+  --bs-btn-bg: var(--color-danger);
+  --bs-btn-border-color: var(--color-danger);
+  --bs-btn-hover-bg: #dd6464;
+  --bs-btn-hover-border-color: #dd6464;
+  --bs-btn-active-bg: #cf5b5b;
+  --bs-btn-active-border-color: #cf5b5b;
+  --bs-btn-disabled-bg: var(--color-danger);
+  --bs-btn-disabled-border-color: var(--color-danger);
+}
+
+.btn-outline-danger {
+  --bs-btn-color: #d36565;
+  --bs-btn-border-color: var(--color-danger);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--color-danger);
+  --bs-btn-hover-border-color: var(--color-danger);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #dd6464;
+  --bs-btn-active-border-color: #dd6464;
+  --bs-btn-disabled-color: var(--color-danger);
+  --bs-btn-disabled-border-color: var(--color-danger);
+}
+
+.btn-info {
+  --bs-btn-bg: var(--color-info);
+  --bs-btn-border-color: var(--color-info);
+  --bs-btn-hover-bg: #3d87a3;
+  --bs-btn-hover-border-color: #3d87a3;
+  --bs-btn-active-bg: #35778f;
+  --bs-btn-active-border-color: #35778f;
+  --bs-btn-disabled-bg: var(--color-info);
+  --bs-btn-disabled-border-color: var(--color-info);
+}
+
+.btn-outline-info {
+  --bs-btn-color: var(--color-info);
+  --bs-btn-border-color: var(--color-info);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--color-info);
+  --bs-btn-hover-border-color: var(--color-info);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #3d87a3;
+  --bs-btn-active-border-color: #3d87a3;
+  --bs-btn-disabled-color: var(--color-info);
+  --bs-btn-disabled-border-color: var(--color-info);
+}
+
+/* ---------- Forms ---------- */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 0 0.22rem var(--color-focus-ring);
+}
+
+.form-check-input:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.form-check-input:focus {
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 0 0.22rem var(--color-focus-ring);
+}
+
+.form-select:focus {
+  border-color: var(--color-cyan);
+}
+
+/* ---------- Tables ---------- */
+.table {
+  --bs-table-hover-bg: #f6fbfd;
+  --bs-table-border-color: var(--color-border);
+}
+
+.table thead th {
+  color: var(--color-main-text);
+  background-color: var(--color-tint);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ---------- Navigation / pagination / dropdowns ---------- */
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background-color: var(--color-primary);
+}
+
+.page-link {
+  color: var(--color-primary-dark);
+}
+
+.page-item.active .page-link {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+  background-color: var(--color-primary);
+}
+
+/* ---------- Alerts ---------- */
+.alert-primary {
+  --bs-alert-color: #35748a;
+  --bs-alert-bg: rgba(95, 175, 203, 0.14);
+  --bs-alert-border-color: rgba(95, 175, 203, 0.35);
+}
+
+.alert-success {
+  --bs-alert-color: #25775f;
+  --bs-alert-bg: rgba(61, 184, 154, 0.13);
+  --bs-alert-border-color: rgba(61, 184, 154, 0.35);
+}
+
+.alert-danger {
+  --bs-alert-color: #b05252;
+  --bs-alert-bg: rgba(233, 121, 121, 0.12);
+  --bs-alert-border-color: rgba(233, 121, 121, 0.35);
+}
+
+.alert-warning {
+  --bs-alert-color: #a4661f;
+  --bs-alert-bg: rgba(240, 163, 94, 0.14);
+  --bs-alert-border-color: rgba(240, 163, 94, 0.38);
+}
+
+.alert-info {
+  --bs-alert-color: #3d87a3;
+  --bs-alert-bg: rgba(74, 159, 190, 0.12);
+  --bs-alert-border-color: rgba(74, 159, 190, 0.32);
+}
+
+/* ---------- Badges ---------- */
+.text-bg-primary {
+  background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity, 1)) !important;
+  color: #fff !important;
+}
+
+.text-bg-secondary {
+  background-color: rgba(var(--bs-secondary-rgb), var(--bs-bg-opacity, 1)) !important;
+  color: #24484f !important;
+}
+
+.text-bg-success {
+  background-color: rgba(var(--bs-success-rgb), var(--bs-bg-opacity, 1)) !important;
+  color: #fff !important;
+}
+
+.text-bg-warning {
+  background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity, 1)) !important;
+  color: #fff !important;
+}
+
+.text-bg-danger {
+  background-color: rgba(var(--bs-danger-rgb), var(--bs-bg-opacity, 1)) !important;
+  color: #fff !important;
+}
+
+.text-bg-info {
+  background-color: rgba(var(--bs-info-rgb), var(--bs-bg-opacity, 1)) !important;
+  color: #fff !important;
 }
