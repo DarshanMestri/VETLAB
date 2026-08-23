@@ -15,6 +15,8 @@ type Row = {
   balance: number;
   discountAmount: number;
   paymentStatus: string;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
 };
 type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
 
@@ -44,6 +46,14 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
             <div class="col-md-2">
               <label class="form-label small fw-semibold">Date To</label>
               <input class="form-control form-control-sm" type="date" [(ngModel)]="dateTo" name="dateTo" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Status</label>
+              <select class="form-select form-select-sm" [(ngModel)]="statusFilter" name="statusFilter" (change)="loadData()">
+                <option value="active">Active</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="all">All</option>
+              </select>
             </div>
             <div class="col-auto">
               <button class="btn btn-sm btn-primary" (click)="loadData()">Search</button>
@@ -90,10 +100,16 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
                 [class.bg-success]="r.paymentStatus === 'Paid'">
                 {{ r.paymentStatus || 'Unpaid' }}
               </span>
+              <span class="badge bg-secondary ms-1" *ngIf="r.cancelledAt"
+                    [title]="r.cancellationReason ? 'Reason: ' + r.cancellationReason : ''">
+                Cancelled
+              </span>
             </td>
             <td class="text-end">
               <a class="btn btn-sm btn-outline-primary me-1" [routerLink]="['/registrations', r.id]">Edit</a>
               <button class="btn btn-sm btn-outline-secondary me-1" type="button" (click)="reprintBarcode(r.id)">Reprint Barcode</button>
+              <button class="btn btn-sm btn-outline-danger me-1" type="button"
+                      *ngIf="!r.cancelledAt" (click)="openCancelPopup(r)">Cancel</button>
               <button class="btn btn-sm btn-outline-success me-1" type="button" (click)="sendInvoice(r.id)">WhatsApp Invoice</button>
               <button class="btn btn-sm btn-outline-success" type="button" (click)="sendReceipt(r.id)">WhatsApp Receipt</button>
             </td>
@@ -101,6 +117,35 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
         </tbody>
       </table>
       <p *ngIf="!rows.length">No registrations.</p>
+
+      <!-- Cancel reason popup -->
+      <div class="modal-backdrop show" *ngIf="cancelTarget"></div>
+      <div class="modal d-block" tabindex="-1" *ngIf="cancelTarget">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Cancel Registration</h5>
+              <button type="button" class="btn-close" (click)="closeCancelPopup()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="mb-2">
+                Cancel registration <strong>{{ cancelTarget?.barcode }}</strong> for
+                <strong>{{ cancelTarget?.ownerName }}</strong>?
+              </p>
+              <label class="form-label fw-semibold small">Reason (required)</label>
+              <textarea class="form-control" rows="3" maxlength="500"
+                        [(ngModel)]="cancelReason" name="cancelReason"
+                        placeholder="Enter cancellation reason..."></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" [disabled]="cancelling" (click)="closeCancelPopup()">Close</button>
+              <button type="button" class="btn btn-danger" [disabled]="cancelling" (click)="confirmCancel()">
+                {{ cancelling ? 'Cancelling...' : 'OK' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Pagination -->
       <div class="d-flex justify-content-between align-items-center mt-2" *ngIf="total > 0">
@@ -124,6 +169,11 @@ export class RegistrationsListComponent {
   search = '';
   dateFrom = '';
   dateTo = '';
+  statusFilter: 'active' | 'cancelled' | 'all' = 'active';
+
+  cancelTarget: Row | null = null;
+  cancelReason = '';
+  cancelling = false;
 
   get totalPages(): number {
     return Math.ceil(this.total / this.pageSize);
@@ -134,7 +184,7 @@ export class RegistrationsListComponent {
   }
 
   loadData() {
-    const params: any = { page: this.page, pageSize: this.pageSize };
+    const params: any = { page: this.page, pageSize: this.pageSize, status: this.statusFilter };
     if (this.search?.trim()) params.search = this.search.trim();
     if (this.dateFrom) params.dateFrom = this.dateFrom;
     if (this.dateTo) params.dateTo = this.dateTo;
@@ -197,5 +247,42 @@ export class RegistrationsListComponent {
       },
       error: () => alert('Failed to generate barcode PDF.'),
     });
+  }
+
+  openCancelPopup(row: Row) {
+    this.cancelTarget = row;
+    this.cancelReason = '';
+    this.cancelling = false;
+  }
+
+  closeCancelPopup() {
+    if (this.cancelling) return;
+    this.cancelTarget = null;
+    this.cancelReason = '';
+  }
+
+  confirmCancel() {
+    const reason = (this.cancelReason ?? '').trim();
+    if (!reason) {
+      alert('Please enter a cancellation reason.');
+      return;
+    }
+    if (!this.cancelTarget || this.cancelling) return;
+
+    this.cancelling = true;
+    this.http
+      .post(`/api/registrations/${this.cancelTarget.id}/cancel`, { reason })
+      .subscribe({
+        next: () => {
+          this.cancelTarget = null;
+          this.cancelReason = '';
+          this.cancelling = false;
+          this.loadData();
+        },
+        error: (err) => {
+          this.cancelling = false;
+          alert(this.extractError(err, 'Failed to cancel registration.'));
+        },
+      });
   }
 }

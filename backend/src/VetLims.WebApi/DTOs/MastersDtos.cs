@@ -212,7 +212,9 @@ public record RegistrationDto(
     int? DiscountType = null,
     int? AgeValue = null,
     int? AgeUnit = null,
-    string PaymentStatus = "Unpaid"
+    string PaymentStatus = "Unpaid",
+    DateTime? CancelledAt = null,
+    string? CancellationReason = null
 );
 
 public record RegistrationAnimalDto(int SpeciesId, string? AnimalName, int? AnimalId = null, int? AgeInDays = null);

@@ -3226,6 +3226,15 @@ namespace VetLims.Infrastructure.Migrations
                     b.Property<int?>("BranchId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CancellationReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CancelledBy")
+                        .HasColumnType("text");
+
                     b.Property<int?>("ClientId")
                         .HasColumnType("integer");
 

@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using VetLims.Infrastructure.Entities;
 
@@ -30,12 +31,25 @@ public class BarcodeService
             }
         }
 
-        // Atomic increment using raw SQL (PostgreSQL: UPDATE ... RETURNING)
-        var result = await _db.Database
-            .SqlQueryRaw<long>(
-                "UPDATE barcode_sequences SET current_value = current_value + 1 WHERE prefix = {0} RETURNING current_value",
-                prefix)
-            .FirstOrDefaultAsync(ct);
+        // Atomic increment using raw ADO (PostgreSQL: UPDATE ... RETURNING).
+        // SqlQueryRaw is not usable here: an UPDATE statement is non-composable,
+        // so any LINQ operator over it throws, and scalar SqlQuery maps by column
+        // name "Value" which RETURNING does not emit. ExecuteScalar avoids both.
+        var conn = _db.Database.GetDbConnection();
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var cmd = conn.CreateCommand();
+        // Table is snake_case but columns keep EF's PascalCase (quoted) names.
+        cmd.CommandText =
+            "UPDATE barcode_sequences SET \"CurrentValue\" = \"CurrentValue\" + 1 WHERE \"Prefix\" = @prefix RETURNING \"CurrentValue\"";
+        var param = cmd.CreateParameter();
+        param.ParameterName = "@prefix";
+        param.Value = prefix;
+        cmd.Parameters.Add(param);
+
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        var result = scalar == null || scalar == DBNull.Value ? 0L : Convert.ToInt64(scalar);
 
         if (result == 0)
         {

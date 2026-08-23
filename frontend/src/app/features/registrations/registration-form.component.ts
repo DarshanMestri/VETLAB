@@ -30,7 +30,7 @@ enum AgeUnit {
 
 type Species = { id: number; name: string; code?: string };
 type Client = { id: number; name: string; code?: string };
-type OwnerOption = { id: number; ownerCode?: string; name: string; nameAr?: string; mobile?: string };
+type OwnerOption = { id: number; code?: string; name: string; nameAr?: string; mobile?: string };
 type AnimalOption = { id: number; ownerId: number; animalCode?: string; name: string; speciesId: number };
 type DoctorOption = { id: number; code?: string; name: string };
 type SampleTypeOption = { id: number; code?: string; name: string };
@@ -147,7 +147,7 @@ type CreateDto = {
                         (click)="selectOwnerFromSearch(o)">
                   <span class="fw-semibold">{{ o.name }}</span>
                   <span class="text-muted" *ngIf="o.mobile">{{ o.mobile }}</span>
-                  <span class="text-muted" *ngIf="o.ownerCode">{{ o.ownerCode }}</span>
+                  <span class="text-muted" *ngIf="o.code">{{ o.code }}</span>
                 </button>
               </div>
             </div>
@@ -989,7 +989,10 @@ export class RegistrationFormComponent implements AfterViewInit {
     if (id && id !== 'new') {
       this.editMode = true;
       this.editId = Number(id);
+      // Fetch registration + lookups concurrently so dropdowns never wait
+      // behind the detail request (no second-wave population).
       this.loadRegistrationForEdit();
+      this.loadLookups();
     } else {
       this.loadLookups();
     }
@@ -1038,8 +1041,6 @@ export class RegistrationFormComponent implements AfterViewInit {
             sampleTypeId: i.sampleTypeId,
           }));
         }
-
-        this.loadLookups();
       },
       error: () => {
         this.errorMessage = 'Failed to load registration for editing.';

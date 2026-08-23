@@ -67,7 +67,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Patient Management',
     icon: ICONS.users,
     children: [
-      { label: 'Clients', route: '/clients', roles: ['Admin', 'Manager'], icon: ICONS.briefcase },
       { label: 'Owners & Animals', route: '/owners', icon: ICONS.heart },
       { label: 'Registrations', route: '/registrations', icon: ICONS.clipboard },
     ],
@@ -127,6 +126,12 @@ const NAV_GROUPS: NavGroup[] = [
         route: '/laboratory-master',
         roles: ['Admin'],
         icon: ICONS.database,
+      },
+      {
+        label: 'Clients Master',
+        route: '/clients',
+        roles: ['Admin', 'Manager'],
+        icon: ICONS.briefcase,
       },
       {
         label: 'User Creation Master',

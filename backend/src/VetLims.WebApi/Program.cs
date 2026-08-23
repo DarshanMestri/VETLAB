@@ -25,12 +25,18 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 // 1) REGISTER SERVICES (everything goes here, BEFORE Build)
-builder.Services.AddDbContext<VetLimsDbContext>(opts =>
+var npgsqlOptionsAction = (DbContextOptionsBuilder opts) =>
 {
     var cs = builder.Configuration.GetConnectionString("DefaultConnection")
              ?? "Host=localhost;Port=5432;Database=vet_lims;Username=vet_user;Password=p@ssw0rd";
     opts.UseNpgsql(cs);
-});
+};
+builder.Services.AddDbContext<VetLimsDbContext>(npgsqlOptionsAction);
+// Factory enables safe parallel queries: DbContext is not thread-safe, so each
+// concurrent query must get its own short-lived context instance. The factory
+// itself is SCOPED because VetLimsDbContext resolves the scoped
+// ICurrentUserService for audit fields — a singleton factory could not.
+builder.Services.AddDbContextFactory<VetLimsDbContext>(npgsqlOptionsAction, ServiceLifetime.Scoped);
 
 builder.Services
     .AddIdentity<AppUser, IdentityRole<int>>()

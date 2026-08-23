@@ -12,6 +12,7 @@ public class ListQuery
     public int? SpeciesId { get; set; }
     public DateTime? DateFrom { get; set; }         // date range filters
     public DateTime? DateTo { get; set; }
+    public string? Status { get; set; }             // active (default) | cancelled | all
 }
 
 /// <summary>

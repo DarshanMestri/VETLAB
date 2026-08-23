@@ -20,10 +20,11 @@ public class RegistrationsController : ControllerBase
     private readonly BarcodeService _barcodes;
     private readonly ICurrentUserService _currentUserService;
     private readonly BarcodeLabelReportService _barcodeReport;
+    private readonly IDbContextFactory<VetLimsDbContext> _dbFactory;
 
-    public RegistrationsController(VetLimsDbContext db, PricingService pricing, BarcodeService barcodes, ICurrentUserService currentUserService, BarcodeLabelReportService barcodeReport)
+    public RegistrationsController(VetLimsDbContext db, PricingService pricing, BarcodeService barcodes, ICurrentUserService currentUserService, BarcodeLabelReportService barcodeReport, IDbContextFactory<VetLimsDbContext> dbFactory)
     {
-        _db = db; _pricing = pricing; _barcodes = barcodes; _currentUserService = currentUserService; _barcodeReport = barcodeReport;
+        _db = db; _pricing = pricing; _barcodes = barcodes; _currentUserService = currentUserService; _barcodeReport = barcodeReport; _dbFactory = dbFactory;
     }
 
     // List + filters (owner search, client, species)
@@ -33,7 +34,17 @@ public class RegistrationsController : ControllerBase
         var page = Math.Max(q.Page, 1);
         var size = Math.Clamp(q.PageSize, 1, 200);
 
-        var query = _db.Registrations.AsNoTracking();
+        var query = _db.Registrations.AsNoTracking().Where(x => !x.IsDeleted);
+
+        // Status filter: active (default) hides cancelled registrations,
+        // "cancelled" shows only those, "all" shows everything non-deleted.
+        var status = (q.Status ?? "active").Trim().ToLowerInvariant();
+        query = status switch
+        {
+            "cancelled" or "canceled" => query.Where(x => x.CancelledAt != null),
+            "all" => query,
+            _ => query.Where(x => x.CancelledAt == null),
+        };
 
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
@@ -76,10 +87,41 @@ public class RegistrationsController : ControllerBase
                 (int?)x.DiscountType,
                 x.AgeValue,
                 (int?)x.AgeUnit,
-                x.PaidAmount >= x.TotalAmount ? "Paid" : x.PaidAmount > 0 ? "Partially Paid" : "Unpaid"))
+                x.PaidAmount >= x.TotalAmount ? "Paid" : x.PaidAmount > 0 ? "Partially Paid" : "Unpaid",
+                x.CancelledAt,
+                x.CancellationReason))
             .ToListAsync();
 
         return Ok(new PagedResult<RegistrationDto> { Page = page, PageSize = size, Total = total, Items = items });
+    }
+
+    public record CancelRegistrationDto(string Reason);
+
+    // Cancel an entire registration with a mandatory reason. Pending / in-progress
+    // items are marked Canceled; completed items keep their results.
+    [HttpPost("{id:int}/cancel")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> Cancel(int id, [FromBody] CancelRegistrationDto dto, CancellationToken ct = default)
+    {
+        var reason = dto.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason))
+            return BadRequest("A cancellation reason is required.");
+
+        var reg = await _db.Registrations.Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
+        if (reg is null) return NotFound();
+        if (reg.CancelledAt != null)
+            return BadRequest("This registration is already cancelled.");
+
+        reg.CancelledAt = DateTime.UtcNow;
+        reg.CancelledBy = _currentUserService.UserName ?? $"user-{_currentUserService.UserId}";
+        reg.CancellationReason = reason;
+
+        foreach (var item in reg.Items.Where(i => i.Status == RegItemStatus.Pending || i.Status == RegItemStatus.InProgress))
+            item.Status = RegItemStatus.Canceled;
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { reg.Id, reg.Barcode, cancelledAt = reg.CancelledAt, cancelledBy = reg.CancelledBy, reason = reg.CancellationReason });
     }
 
     // Create registration: animals + items + optional initial payment
@@ -110,6 +152,28 @@ public class RegistrationsController : ControllerBase
             owner = await _db.Owners.FirstOrDefaultAsync(x => x.Id == dto.OwnerId.Value && x.IsActive);
             if (owner is null) return BadRequest("Selected owner was not found.");
         }
+        else if (!string.IsNullOrWhiteSpace(dto.OwnerName))
+        {
+            // Walk-in registration: reuse an existing owner master only when Name AND
+            // Mobile match exactly; otherwise create one so future owner searches find it.
+            var name = dto.OwnerName.Trim();
+            var mobile = dto.OwnerMobile?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(mobile))
+                owner = await _db.Owners.FirstOrDefaultAsync(x => !x.IsDeleted && x.Name == name && x.Mobile == mobile);
+
+            if (owner is null)
+            {
+                owner = new Owner
+                {
+                    Code = await _barcodes.NextAsync("OWN"),
+                    Name = name,
+                    Mobile = mobile,
+                    NameAr = dto.OwnerNameAr?.Trim()
+                };
+                _db.Owners.Add(owner);
+            }
+        }
 
         if (dto.DoctorId.HasValue)
         {
@@ -135,7 +199,7 @@ public class RegistrationsController : ControllerBase
            OwnerNameAr = ownerNameAr,
            OwnerMobile = ownerMobile,
            ClientId = dto.ClientId,
-           OwnerId = dto.OwnerId,
+           Owner = owner,
            DoctorId = dto.DoctorId,
             ReferenceNumber = dto.ReferenceNumber?.Trim(),
             ClinicalNotes = dto.ClinicalNotes?.Trim(),
@@ -460,89 +524,100 @@ public class RegistrationsController : ControllerBase
     }
 
     [HttpGet("lookups")]
-    public async Task<ActionResult<object>> GetLookups()
+    public async Task<ActionResult<object>> GetLookups(CancellationToken ct = default)
     {
-        var owners = await _db.Owners.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, OwnerCode = x.Code, x.Name, x.NameAr, x.Mobile })
-            .ToListAsync();
-
-        var animals = await _db.Animals.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.OwnerId, AnimalCode = x.Code, x.Name, x.SpeciesId })
-            .ToListAsync();
-
-        var doctors = await _db.Doctors.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name })
-            .ToListAsync();
-
-        var sampleTypes = await _db.SampleTypes.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name })
-            .ToListAsync();
-
-        var species = await _db.Species.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name })
-            .ToListAsync();
-
-        var clients = await _db.Clients.AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name })
-            .ToListAsync();
-
         var organizationId = _currentUserService.OrganizationId;
         if (!organizationId.HasValue)
             return Forbid();
 
-        // Only offer tests that are enabled for the logged-in branch (WYSIWYG with create-time validation)
         var branchId = _currentUserService.BranchId;
-        List<int> enabledTestIds = new();
-        if (branchId.HasValue)
+
+        // All lookups are independent — run every query concurrently so total
+        // latency is the slowest single query rather than the sum of all of them.
+        // DbContext is not thread-safe, so each parallel task gets its own
+        // short-lived context from the factory.
+        async Task<List<T>> QueryAsync<T>(Func<VetLimsDbContext, IQueryable<T>> build)
         {
-            enabledTestIds = await (from bt in _db.BranchTests.AsNoTracking()
-                                    join bd in _db.BranchDepartments.AsNoTracking()
-                                        on new { bt.BranchId, bt.Test.DepartmentId } equals new { bd.BranchId, bd.DepartmentId }
-                                    where bt.BranchId == branchId.Value && !bt.IsDeleted && bt.IsActive
-                                          && !bd.IsDeleted && bd.IsActive
-                                    select bt.TestId).ToListAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            return await build(db).ToListAsync(ct);
         }
 
-        var tests = await _db.Tests.AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive
-                && (branchId.HasValue ? enabledTestIds.Contains(x.Id) : true))
+        var ownersTask = QueryAsync(db => db.Owners.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
             .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Test, x.DepartmentId, x.SampleTypeId })
-            .ToListAsync();
+            .Select(x => new { x.Id, OwnerCode = x.Code, x.Name, x.NameAr, x.Mobile }));
 
-        var profiles = await _db.Profiles.AsNoTracking()
-            .Where(x => x.IsActive)
+        var animalsTask = QueryAsync(db => db.Animals.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
             .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Profile, DepartmentId = (int?)null, SampleTypeId = (int?)null })
-            .ToListAsync();
+            .Select(x => new { x.Id, x.OwnerId, AnimalCode = x.Code, x.Name, x.SpeciesId }));
 
-        var packages = await _db.Packages.AsNoTracking()
-            .Where(x => x.IsActive)
+        var doctorsTask = QueryAsync(db => db.Doctors.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
             .OrderBy(x => x.Name)
-            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Package, DepartmentId = (int?)null, SampleTypeId = (int?)null })
-            .ToListAsync();
+            .Select(x => new { x.Id, x.Code, x.Name }));
+
+        var sampleTypesTask = QueryAsync(db => db.SampleTypes.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Code, x.Name }));
+
+        var speciesTask = QueryAsync(db => db.Species.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Code, x.Name }));
+
+        var clientsTask = QueryAsync(db => db.Clients.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Code, x.Name }));
+
+        // Only offer tests that are enabled for the logged-in branch (WYSIWYG with
+        // create-time validation). The branch/department enablement filter is folded
+        // into this single query so nothing has to run in a second wave.
+        var testsTask = QueryAsync(db =>
+        {
+            var testsQuery = db.Tests.AsNoTracking()
+                .Where(x => x.OrganizationId == organizationId.Value && !x.IsDeleted && x.IsActive);
+            if (branchId.HasValue)
+            {
+                testsQuery = testsQuery.Where(x => db.BranchTests.Any(bt =>
+                    bt.TestId == x.Id
+                    && bt.BranchId == branchId.Value
+                    && !bt.IsDeleted && bt.IsActive
+                    && db.BranchDepartments.Any(bd =>
+                        bd.BranchId == bt.BranchId
+                        && bd.DepartmentId == bt.Test.DepartmentId
+                        && !bd.IsDeleted && bd.IsActive)));
+            }
+
+            return testsQuery
+                .OrderBy(x => x.Name)
+                .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Test, x.DepartmentId, x.SampleTypeId });
+        });
+
+        var profilesTask = QueryAsync(db => db.Profiles.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Profile, DepartmentId = (int?)null, SampleTypeId = (int?)null }));
+
+        var packagesTask = QueryAsync(db => db.Packages.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Code, x.Name, ItemType = RegItemType.Package, DepartmentId = (int?)null, SampleTypeId = (int?)null }));
+
+        await Task.WhenAll(ownersTask, animalsTask, doctorsTask, sampleTypesTask,
+            speciesTask, clientsTask, testsTask, profilesTask, packagesTask);
 
         return Ok(new
         {
-            owners,
-            animals,
-            doctors,
-            clients,
-            species,
-            sampleTypes,
-            orderables = tests.Concat<object>(profiles).Concat(packages)
+            owners = ownersTask.Result,
+            animals = animalsTask.Result,
+            doctors = doctorsTask.Result,
+            clients = clientsTask.Result,
+            species = speciesTask.Result,
+            sampleTypes = sampleTypesTask.Result,
+            orderables = testsTask.Result.Concat<object>(profilesTask.Result).Concat(packagesTask.Result)
         });
     }
 

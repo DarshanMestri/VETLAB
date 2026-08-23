@@ -28,12 +28,9 @@ public sealed class BarcodeLabelReportService
                 OwnerName = r.OwnerName,
                 OwnerCode = r.Owner != null ? r.Owner.Code : null,
                 AnimalName = a.AnimalName,
-                AnimalCode = a.Animal != null ? a.Animal.Code : null,
                 Barcode = a.Barcode ?? string.Empty,
                 SpeciesName = a.Species.Name,
-                CollectedAt = _db.RegistrationItems
-                    .Where(i => i.RegistrationId == r.Id && i.SpeciesId == a.SpeciesId && i.SampleCollectedAt != null)
-                    .Max(i => (DateTime?)i.SampleCollectedAt),
+                RegisteredAt = r.CreatedAt,
             }))
             .ToListAsync(ct);
 
@@ -54,12 +51,9 @@ public sealed class BarcodeLabelReportService
                 OwnerName = a.Registration.OwnerName,
                 OwnerCode = a.Registration.Owner != null ? a.Registration.Owner.Code : null,
                 AnimalName = a.AnimalName,
-                AnimalCode = a.Animal != null ? a.Animal.Code : null,
                 Barcode = a.Barcode ?? string.Empty,
                 SpeciesName = a.Species.Name,
-                CollectedAt = _db.RegistrationItems
-                    .Where(i => i.RegistrationId == a.RegistrationId && i.SpeciesId == a.SpeciesId && i.SampleCollectedAt != null)
-                    .Max(i => (DateTime?)i.SampleCollectedAt),
+                RegisteredAt = a.Registration.CreatedAt,
             })
             .FirstOrDefaultAsync(ct);
 
@@ -77,10 +71,9 @@ internal sealed record BarcodeLabelModel
     public string OwnerName { get; init; } = string.Empty;
     public string? OwnerCode { get; init; }
     public string AnimalName { get; init; } = string.Empty;
-    public string? AnimalCode { get; init; }
     public string Barcode { get; init; } = string.Empty;
     public string SpeciesName { get; init; } = string.Empty;
-    public DateTime? CollectedAt { get; init; }
+    public DateTime RegisteredAt { get; init; }
 }
 
 internal sealed class BarcodeLabelDocument : IDocument
@@ -101,33 +94,34 @@ internal sealed class BarcodeLabelDocument : IDocument
             container.Page(page =>
             {
                 page.Size(2, 1, Unit.Inch);
-                page.Margin(0.1f, Unit.Inch);
+                page.Margin(0.07f, Unit.Inch);
                 page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Arial"));
 
-                page.Content().Column(column =>
+                // Two-column layout keeps everything on a single physical label:
+                // left = identity text block, right = scannable barcode.
+                page.Content().Row(row =>
                 {
-                    column.Spacing(2);
-
-                    // Top: Animal Name + Animal ID
-                    column.Item().Row(row =>
+                    row.ConstantItem(92).Column(text =>
                     {
-                        row.RelativeItem().Text(label.AnimalName).SemiBold().FontSize(9);
-                        if (!string.IsNullOrWhiteSpace(label.AnimalCode))
-                            row.ConstantItem(80).AlignRight().Text(label.AnimalCode).FontSize(7).FontColor(Colors.Grey.Darken1);
+                        text.Item().Text(t =>
+                        {
+                            t.Span(label.AnimalName).SemiBold().FontSize(8);
+                            if (!string.IsNullOrWhiteSpace(label.SpeciesName))
+                            {
+                                t.Span(" · ").FontSize(7).FontColor(Colors.Grey.Darken1);
+                                t.Span(label.SpeciesName).FontSize(7).FontColor(Colors.Grey.Darken2);
+                            }
+                        });
+
+                        if (!string.IsNullOrWhiteSpace(label.OwnerCode))
+                            text.Item().PaddingTop(1).Text(label.OwnerCode).FontSize(6).FontColor(Colors.Grey.Darken1);
+
+                        text.Item().PaddingTop(2).Text($"Barcode: {label.Barcode}").FontSize(6.5f).FontColor(Colors.Grey.Darken2);
+                        text.Item().Text($"Date: {label.RegisteredAt:dd-MMM-yyyy hh:mm tt}").FontSize(6).FontColor(Colors.Grey.Medium);
                     });
 
-                    // Middle: Scannable Barcode image
-                    column.Item().PaddingVertical(4).AlignCenter().Height(28).Image(GenerateBarcodeImage(label.Barcode));
-
-                    // Bottom: Barcode ID + Collection DateTime
-                    column.Item().Column(bottom =>
-                    {
-                        bottom.Item().Text($"Barcode: {label.Barcode}").FontSize(7).FontColor(Colors.Grey.Darken2);
-                        var dt = label.CollectedAt.HasValue
-                            ? $"Collected: {label.CollectedAt.Value:dd-MMM-yyyy hh:mm tt}"
-                            : "Collected: Pending";
-                        bottom.Item().Text(dt).FontSize(6).FontColor(Colors.Grey.Medium);
-                    });
+                    row.RelativeItem().AlignCenter().AlignMiddle().MaxHeight(30).MaxWidth(84)
+                        .Image(GenerateBarcodeImage(label.Barcode));
                 });
             });
         }

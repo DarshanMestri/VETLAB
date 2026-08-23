@@ -54,6 +54,11 @@ public class Registration : BaseEntity
     // Registration-level patient age (single source of truth for all species/tests)
     public int? AgeValue { get; set; }
     public AgeUnit? AgeUnit { get; set; }
+
+    // Cancellation: stamp set when the whole registration is cancelled with a reason.
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelledBy { get; set; }
+    public string? CancellationReason { get; set; }
 }
 
 // public class RegistrationAnimal

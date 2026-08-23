@@ -13,7 +13,7 @@ type Row = { id: number; code: string; name: string; isActive: boolean };
   template: `
     <div class="container py-3">
       <div class="d-flex justify-content-between align-items-center">
-        <h2>Clients</h2>
+        <h2>Clients Master</h2>
         <div>
           <input
             class="form-control form-control-sm d-inline-block w-auto me-2"
@@ -70,6 +70,7 @@ type Row = { id: number; code: string; name: string; isActive: boolean };
       *ngIf="dlgOpen"
       [title]="dlgTitle"
       [model]="dlgModel"
+      [saving]="saving"
       (submit)="save($event)"
       (closed)="dlgOpen = false"
     >
@@ -103,6 +104,7 @@ export class ClientsListComponent {
   dlgTitle = 'New Client';
   dlgModel: any = { code: '', name: '', isActive: true };
   editingId: number | null = null;
+  saving = false;
 
   ngOnInit() {
     this.load();
@@ -140,21 +142,39 @@ export class ClientsListComponent {
   }
 
   save(model: any) {
+    if (this.saving) return;
+
+    const name = model?.name?.trim?.() ?? '';
+    if (!name) {
+      alert('Client name is required.');
+      return;
+    }
+    const payload = { ...model, name };
+
+    this.saving = true;
     if (this.editingId == null) {
-      this.http.post<Row>('/api/clients', model).subscribe({
+      this.http.post<Row>('/api/clients', payload).subscribe({
         next: (_) => {
           this.dlgOpen = false;
+          this.saving = false;
           this.load();
         },
-        error: (err) => alert(this.extractError(err, 'Create failed')),
+        error: (err) => {
+          this.saving = false;
+          alert(this.extractError(err, 'Create failed'));
+        },
       });
     } else {
-      this.http.put(`/api/clients/${this.editingId}`, model).subscribe({
+      this.http.put(`/api/clients/${this.editingId}`, payload).subscribe({
         next: (_) => {
           this.dlgOpen = false;
+          this.saving = false;
           this.load();
         },
-        error: (err) => alert(this.extractError(err, 'Update failed')),
+        error: (err) => {
+          this.saving = false;
+          alert(this.extractError(err, 'Update failed'));
+        },
       });
     }
   }
