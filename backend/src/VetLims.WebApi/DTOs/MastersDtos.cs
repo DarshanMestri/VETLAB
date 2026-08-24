@@ -315,13 +315,22 @@ public record ResultValueDto(
     bool? IsOutOfRange
 );
 
-public record ResultAnimalDto(
-    int Id,
+public record AnimalResultDto(
+    int RegistrationAnimalId,
+    int AnimalId,
     string AnimalName,
-    int SpeciesId,
     string? SpeciesName,
-    int? AnimalId,
-    int? AgeInDays
+    int? AgeInDays,
+    IEnumerable<ResultValueDto> Values,
+    bool IsVerified,
+    bool IsAuthenticated,
+    string? TechnicianVerifiedBy,
+    DateTime? TechnicianVerifiedAt,
+    string? PathologistAuthenticatedBy,
+    DateTime? PathologistAuthenticatedAt,
+    string? DigitalSignature,
+    string? VerificationRemarks,
+    string? Notes
 );
 
 public record ResultDetailDto(
@@ -330,14 +339,7 @@ public record ResultDetailDto(
     string? Notes,
     string SampleStatus,
     string Status,
-    string? TechnicianVerifiedBy,
-    DateTime? TechnicianVerifiedAt,
-    string? PathologistAuthenticatedBy,
-    DateTime? PathologistAuthenticatedAt,
-    string? DigitalSignature,
-    string? VerificationRemarks,
-    IEnumerable<ResultValueDto> Values,
-    IEnumerable<ResultAnimalDto> Animals,
+    IEnumerable<AnimalResultDto> AnimalResults,
     string? OwnerName = null,
     string? OwnerNameAr = null,
     string? OwnerMobile = null,
@@ -353,6 +355,7 @@ public record ResultDetailDto(
 // payload to save values
 public record ResultEntryDto(
     int RegistrationItemId,
+    int? RegistrationAnimalId,
     int? SpeciesId,
     int? AgeInDays,
     string? Notes,
@@ -372,6 +375,8 @@ public record ResultEntryValue(
 );
 
 public record SampleWorkflowUpdateDto(string? Notes = null);
-public record ResultVerificationDto(string? Remarks = null);
-public record ResultAuthenticationDto(string? DigitalSignature = null, string? Remarks = null);
+public record ResultVerificationDto(int? RegistrationAnimalId, string? Remarks = null);
+public record ResultAuthenticationDto(int? RegistrationAnimalId, string? DigitalSignature = null, string? Remarks = null);
 public record ResultRerunDto(string? Reason = null);
+
+public record ResultReportQueryDto(int? AnimalId = null, bool Combined = false);

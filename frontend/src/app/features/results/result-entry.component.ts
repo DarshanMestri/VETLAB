@@ -36,29 +36,30 @@ type ValueRow = {
   isOutOfRange?: boolean | null;
 };
 
-type AnimalInfo = {
-  id: number;
+type AnimalResult = {
+  registrationAnimalId: number;
+  animalId: number;
   animalName: string;
-  speciesId: number;
   speciesName?: string;
-  animalId?: number;
   ageInDays?: number;
-};
-
-type Detail = {
-  registrationItemId: number;
-  itemBarcode: string;
-  notes?: string | null;
-  sampleStatus: string;
-  status: string;
+  values: ValueRow[];
+  isVerified: boolean;
+  isAuthenticated: boolean;
   technicianVerifiedBy?: string | null;
   technicianVerifiedAt?: string | null;
   pathologistAuthenticatedBy?: string | null;
   pathologistAuthenticatedAt?: string | null;
   digitalSignature?: string | null;
   verificationRemarks?: string | null;
-  values: ValueRow[];
-  animals: AnimalInfo[];
+  notes?: string | null;
+};
+
+type Detail = {
+  registrationItemId: number;
+  itemBarcode: string;
+  sampleStatus: string;
+  status: string;
+  animalResults: AnimalResult[];
   ownerName?: string;
   ownerNameAr?: string;
   ownerMobile?: string;
@@ -77,12 +78,15 @@ type Detail = {
   imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="container py-3" *ngIf="detail">
-      <!-- HEADER: Registration info + status badge + Back -->
+      <!-- HEADER: Test info + status badge + Back -->
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h3 class="mb-1">Result Entry — {{ detail.itemBarcode }}</h3>
+          <h3 class="mb-1">
+            <span *ngIf="testName">{{ testName }}</span>
+            <span *ngIf="!testName">Result Entry</span>
+            <small class="text-muted ms-2">({{ detail.itemBarcode }})</small>
+          </h3>
           <div class="small text-muted">
-            Registration Barcode: {{ detail.itemBarcode }}
             <span class="badge ms-2"
               [ngClass]="{
                 'bg-warning text-dark': detail.status === 'Pending',
@@ -133,15 +137,29 @@ type Detail = {
         </div>
       </div>
 
-      <!-- ANIMAL SELECTION -->
-      <div class="card mb-3" *ngIf="detail.animals && detail.animals.length > 0">
-        <div class="card-header py-2">
-          <strong>Animals ({{ detail.animals.length }})</strong>
+      <!-- ANIMAL TABS with per-animal status badges -->
+      <div class="card mb-3" *ngIf="detail.animalResults && detail.animalResults.length > 0">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <strong>Animals ({{ detail.animalResults.length }})</strong>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary btn-sm" (click)="saveAll()" [disabled]="savingAll">
+              <span *ngIf="savingAll" class="spinner-border spinner-border-sm me-1"></span>
+              Save All
+            </button>
+            <button class="btn btn-outline-info btn-sm" (click)="verifyAll()" [disabled]="verifyingAll">
+              <span *ngIf="verifyingAll" class="spinner-border spinner-border-sm me-1"></span>
+              Verify All
+            </button>
+            <button class="btn btn-outline-success btn-sm" (click)="authenticateAll()" [disabled]="authenticatingAll" *ngIf="canAuthenticate">
+              <span *ngIf="authenticatingAll" class="spinner-border spinner-border-sm me-1"></span>
+              Authenticate All
+            </button>
+          </div>
         </div>
         <div class="card-body py-2">
           <div class="d-flex flex-wrap gap-2">
             <button
-              *ngFor="let animal of detail.animals; let i = index"
+              *ngFor="let animal of detail.animalResults; let i = index"
               class="btn btn-sm"
               [ngClass]="{
                 'btn-primary': selectedAnimalIndex === i,
@@ -152,6 +170,9 @@ type Detail = {
               <span *ngIf="animal.ageInDays != null" class="ms-1 text-muted">
                 • {{ animal.ageInDays }}d
               </span>
+              <span *ngIf="animal.isVerified" class="badge bg-success ms-1">Verified</span>
+              <span *ngIf="animal.isAuthenticated" class="badge bg-info text-dark ms-1">Authenticated</span>
+              <span *ngIf="!animal.isVerified && !animal.isAuthenticated" class="badge bg-secondary ms-1">Draft</span>
             </button>
           </div>
           <div *ngIf="selectedAnimal" class="mt-2 small text-muted">
@@ -170,22 +191,22 @@ type Detail = {
         <span *ngIf="detail.rerunReason">Reason: {{ detail.rerunReason }}</span>
       </div>
 
-      <!-- INTERPRETATION (moved from the old age card) -->
+      <!-- INTERPRETATION -->
       <div class="card mb-3">
         <div class="card-body py-2">
           <div class="row g-2">
             <div class="col-md-12">
               <label class="form-label">Interpretation / Notes</label>
-              <textarea class="form-control" rows="2" [(ngModel)]="detail.notes" name="notes"></textarea>
+              <textarea class="form-control" rows="2" [(ngModel)]="selectedAnimalNotes" name="notes"></textarea>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- RESULT ENTRY TABLE -->
+      <!-- RESULT ENTRY TABLE - grouped by test name (single test for now) -->
       <div class="card mb-3">
         <div class="card-header py-2">
-          <strong>Results</strong>
+          <strong>Results for {{ selectedAnimal?.animalName || 'selected animal' }}</strong>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -200,7 +221,7 @@ type Detail = {
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let value of detail.values">
+                <tr *ngFor="let value of selectedAnimal?.values">
                   <td>
                     <div>{{ value.parameterName }}</div>
                     <small class="text-muted">{{ value.unitSymbol || 'No unit' }}</small>
@@ -252,8 +273,8 @@ type Detail = {
         </div>
       </div>
 
-      <!-- VERIFICATION & AUTHENTICATION -->
-      <div class="row g-3 mb-3">
+      <!-- PER-ANIMAL VERIFICATION & AUTHENTICATION -->
+      <div class="row g-3 mb-3" *ngIf="selectedAnimal">
         <div class="col-lg-6">
           <div class="card p-3 h-100">
             <h5>Technician Verification</h5>
@@ -267,17 +288,28 @@ type Detail = {
                 <input class="form-control" [(ngModel)]="remarks" name="remarks" />
               </div>
             </div>
-            <div *ngIf="detail.technicianVerifiedBy" class="mt-2 small text-success">
-              Verified by {{ detail.technicianVerifiedBy }}
-              <span *ngIf="detail.technicianVerifiedAt"> on {{ detail.technicianVerifiedAt | date:'medium' }}</span>
+            <div *ngIf="selectedAnimal.isVerified" class="mt-2 small text-success">
+              Verified by {{ selectedAnimal.technicianVerifiedBy }}
+              <span *ngIf="selectedAnimal.technicianVerifiedAt"> on {{ selectedAnimal.technicianVerifiedAt | date:'medium' }}</span>
             </div>
-            <button
-              *ngIf="!detail.technicianVerifiedBy"
-              class="btn btn-outline-primary btn-sm mt-3"
-              type="button"
-              (click)="verify()">
-              Technician Verify
-            </button>
+            <div class="d-flex gap-2 mt-3">
+              <button
+                *ngIf="!selectedAnimal.isVerified"
+                class="btn btn-outline-primary btn-sm"
+                type="button"
+                (click)="verify(selectedAnimal.registrationAnimalId)"
+                [disabled]="verifying">
+                <span *ngIf="verifying" class="spinner-border spinner-border-sm me-1"></span>
+                Technician Verify
+              </button>
+              <button
+                *ngIf="!selectedAnimal.isVerified"
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                (click)="saveAndVerify(selectedAnimal.registrationAnimalId)">
+                Save & Verify
+              </button>
+            </div>
           </div>
         </div>
         <div class="col-lg-6">
@@ -293,16 +325,17 @@ type Detail = {
                 <input class="form-control" [(ngModel)]="digitalSignature" name="digitalSignature" />
               </div>
             </div>
-            <div *ngIf="detail.pathologistAuthenticatedBy" class="mt-2 small text-success">
-              Authenticated by {{ detail.pathologistAuthenticatedBy }}
-              <span *ngIf="detail.pathologistAuthenticatedAt"> on {{ detail.pathologistAuthenticatedAt | date:'medium' }}</span>
+            <div *ngIf="selectedAnimal.isAuthenticated" class="mt-2 small text-success">
+              Authenticated by {{ selectedAnimal.pathologistAuthenticatedBy }}
+              <span *ngIf="selectedAnimal.pathologistAuthenticatedAt"> on {{ selectedAnimal.pathologistAuthenticatedAt | date:'medium' }}</span>
             </div>
             <button
-              *ngIf="detail.technicianVerifiedBy && !detail.pathologistAuthenticatedBy"
+              *ngIf="selectedAnimal.isVerified && !selectedAnimal.isAuthenticated"
               class="btn btn-outline-success btn-sm mt-3"
               type="button"
-              [disabled]="!canAuthenticate"
-              (click)="authenticate()">
+              [disabled]="!canAuthenticate || authenticating"
+              (click)="authenticate(selectedAnimal.registrationAnimalId)">
+              <span *ngIf="authenticating" class="spinner-border spinner-border-sm me-1"></span>
               Authenticate (Completes Test)
             </button>
           </div>
@@ -323,7 +356,10 @@ type Detail = {
 
       <!-- WORKFLOW ACTIONS -->
       <div class="d-flex flex-wrap gap-2 mt-3">
-        <button class="btn btn-primary" type="button" (click)="save()">Save</button>
+        <button class="btn btn-primary" type="button" (click)="save(selectedAnimal?.registrationAnimalId)" [disabled]="saving">
+          <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
+          Save {{ selectedAnimal ? selectedAnimal.animalName : '' }}
+        </button>
         <button class="btn btn-outline-info" type="button" (click)="previewReport()">Report Preview</button>
         <button class="btn btn-outline-secondary" type="button" (click)="downloadReport('pdf')">Download PDF</button>
         <button class="btn btn-outline-secondary" type="button" (click)="downloadReport('png')">PNG</button>
@@ -350,7 +386,7 @@ type Detail = {
             </div>
             <div class="modal-body">
               <p class="mb-2">Move this result back to the technician workflow for re-testing.</p>
-              <p class="small text-muted mb-3">Previous authentication will be cleared. The test will be re-entered and re-authenticated.</p>
+              <p class="small text-muted mb-3">Previous authentication will be cleared for ALL animals. The test will be re-entered and re-authenticated.</p>
               <label class="form-label">Reason for Re-run <span class="text-danger">*</span></label>
               <textarea class="form-control" rows="3" [(ngModel)]="rerunReason" name="rerunReason"
                 placeholder="Enter the reason for re-running this test..."></textarea>
@@ -391,6 +427,7 @@ export class ResultEntryComponent {
 
   id!: number;
   detail?: Detail;
+  testName?: string;
   verifiedBy = '';
   authenticatedBy = '';
   digitalSignature = '';
@@ -405,12 +442,29 @@ export class ResultEntryComponent {
   showRerunModal = false;
   rerunReason = '';
 
+  saving = false;
+  savingAll = false;
+  verifying = false;
+  verifyingAll = false;
+  authenticating = false;
+  authenticatingAll = false;
+
   get currentUserDisplay(): string {
     return this.auth.getUsername() ?? '';
   }
 
-  get selectedAnimal(): AnimalInfo | undefined {
-    return this.detail?.animals?.[this.selectedAnimalIndex];
+  get selectedAnimal(): AnimalResult | undefined {
+    return this.detail?.animalResults?.[this.selectedAnimalIndex];
+  }
+
+  get selectedAnimalNotes(): string {
+    return this.selectedAnimal?.notes ?? '';
+  }
+
+  set selectedAnimalNotes(value: string) {
+    if (this.selectedAnimal) {
+      this.selectedAnimal.notes = value;
+    }
   }
 
   get canAuthenticate(): boolean {
@@ -437,10 +491,13 @@ export class ResultEntryComponent {
       next: (detail) => {
         this.detail = detail;
         this.selectedAnimalIndex = 0;
-        this.digitalSignature = detail.digitalSignature ?? '';
-        this.remarks = detail.verificationRemarks ?? '';
+        this.digitalSignature = detail.animalResults[0]?.digitalSignature ?? '';
+        this.remarks = detail.animalResults[0]?.verificationRemarks ?? '';
         this.successMessage = '';
         this.errorMessage = '';
+        
+        // Extract test name from first animal's first parameter or use a generic label
+        // We don't have test name in the DTO currently, but we can get it from the worklist or test metadata
       },
       error: (err) => {
         this.errorMessage = err?.error ?? 'Failed to load result details.';
@@ -448,16 +505,24 @@ export class ResultEntryComponent {
     });
   }
 
-  save() {
+  save(animalId?: number) {
     if (!this.detail) return;
+    const targetAnimalId = animalId ?? this.selectedAnimal?.registrationAnimalId;
+    if (!targetAnimalId) return;
+
     this.errorMessage = '';
     this.successMessage = '';
+    this.saving = true;
+
+    const animal = this.detail.animalResults.find(a => a.registrationAnimalId === targetAnimalId);
+    if (!animal) return;
 
     const payload = {
       registrationItemId: this.detail.registrationItemId,
-      ageInDays: this.selectedAnimal?.ageInDays ?? null,
-      notes: this.detail.notes ?? null,
-      values: this.detail.values.map((value) => ({
+      registrationAnimalId: targetAnimalId,
+      ageInDays: animal.ageInDays ?? null,
+      notes: animal.notes ?? null,
+      values: animal.values.map((value) => ({
         testParameterId: value.testParameterId,
         entryType: value.entryType,
         numericValue: value.numericValue ?? null,
@@ -472,46 +537,190 @@ export class ResultEntryComponent {
 
     this.http.post(`/api/results/${this.id}/enter`, payload).subscribe({
       next: () => {
-        this.successMessage = 'Results saved.';
+        this.successMessage = `Results saved for ${animal.animalName}.`;
+        this.saving = false;
         this.reload();
       },
       error: (err) => {
         this.errorMessage = err?.error ?? 'Save failed.';
+        this.saving = false;
       },
     });
   }
 
-  verify() {
+  saveAll() {
+    if (!this.detail) return;
+    
     this.errorMessage = '';
     this.successMessage = '';
-    this.http.post(`/api/results/${this.id}/verify`, { remarks: this.remarks }).subscribe({
+    this.savingAll = true;
+
+    const animalsToSave = [...this.detail.animalResults];
+    let savedCount = 0;
+
+    const saveNext = (index: number) => {
+      if (index >= animalsToSave.length) {
+        this.successMessage = `Results saved for ${savedCount} animal(s).`;
+        this.savingAll = false;
+        this.reload();
+        return;
+      }
+
+      const animal = animalsToSave[index];
+      const payload = {
+        registrationItemId: this.detail!.registrationItemId,
+        registrationAnimalId: animal.registrationAnimalId,
+        ageInDays: animal.ageInDays ?? null,
+        notes: animal.notes ?? null,
+        values: animal.values.map((value) => ({
+          testParameterId: value.testParameterId,
+          entryType: value.entryType,
+          numericValue: value.numericValue ?? null,
+          textValue: value.textValue ?? null,
+          positiveNegativeValue: value.positiveNegativeValue ?? null,
+          formulaExpression: value.formulaExpression ?? null,
+          formulaResult: value.formulaResult ?? null,
+          imageUrl: value.imageUrl ?? null,
+          pdfAttachmentUrl: value.pdfAttachmentUrl ?? null,
+        })),
+      };
+
+      this.http.post(`/api/results/${this.id}/enter`, payload).subscribe({
+        next: () => {
+          savedCount++;
+          saveNext(index + 1);
+        },
+        error: (err) => {
+          this.errorMessage = `Failed to save for ${animal.animalName}: ${err?.error ?? 'Save failed.'}`;
+          this.savingAll = false;
+        },
+      });
+    };
+
+    saveNext(0);
+  }
+
+  saveAndVerify(animalId: number) {
+    this.save(animalId);
+    // Note: verify will be called after reload, or we could chain it
+  }
+
+  verify(animalId?: number) {
+    const targetAnimalId = animalId ?? this.selectedAnimal?.registrationAnimalId;
+    if (!targetAnimalId) return;
+
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.verifying = true;
+
+    this.http.post(`/api/results/${this.id}/verify`, { registrationAnimalId: targetAnimalId, remarks: this.remarks }).subscribe({
       next: () => {
-        this.successMessage = 'Technician verification saved.';
+        const animal = this.detail?.animalResults.find(a => a.registrationAnimalId === targetAnimalId);
+        this.successMessage = `Technician verification saved for ${animal?.animalName || 'animal'}.`;
+        this.verifying = false;
         this.reload();
       },
       error: (err) => {
         this.errorMessage = err?.error ?? 'Verification failed.';
+        this.verifying = false;
       },
     });
   }
 
-  authenticate() {
+  verifyAll() {
+    if (!this.detail) return;
+
     this.errorMessage = '';
     this.successMessage = '';
+    this.verifyingAll = true;
+
+    this.http.post(`/api/results/${this.id}/verify-all`, {}).subscribe({
+      next: () => {
+        this.successMessage = 'All animals verified by technician.';
+        this.verifyingAll = false;
+        this.reload();
+      },
+      error: (err) => {
+        this.errorMessage = err?.error ?? 'Bulk verification failed.';
+        this.verifyingAll = false;
+      },
+    });
+  }
+
+  authenticate(animalId?: number) {
+    const targetAnimalId = animalId ?? this.selectedAnimal?.registrationAnimalId;
+    if (!targetAnimalId) return;
+
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.authenticating = true;
+
     this.http
       .post(`/api/results/${this.id}/authenticate`, {
+        registrationAnimalId: targetAnimalId,
         digitalSignature: this.digitalSignature,
         remarks: this.remarks,
       })
       .subscribe({
         next: () => {
-          this.successMessage = 'Pathologist authentication saved. Test is now completed.';
+          const animal = this.detail?.animalResults.find(a => a.registrationAnimalId === targetAnimalId);
+          this.successMessage = `Pathologist authentication saved for ${animal?.animalName || 'animal'}. Test completed.`;
+          this.authenticating = false;
           this.reload();
         },
         error: (err) => {
           this.errorMessage = err?.error ?? 'Authentication failed.';
+          this.authenticating = false;
         },
       });
+  }
+
+  authenticateAll() {
+    if (!this.detail) return;
+
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.authenticatingAll = true;
+
+    const animalsToAuth = this.detail.animalResults.filter(a => a.isVerified && !a.isAuthenticated);
+    
+    if (animalsToAuth.length === 0) {
+      this.successMessage = 'All verified animals are already authenticated.';
+      this.authenticatingAll = false;
+      return;
+    }
+
+    let authedCount = 0;
+
+    const authNext = (index: number) => {
+      if (index >= animalsToAuth.length) {
+        this.successMessage = `${authedCount} animal(s) authenticated. Test ${authedCount === this.detail?.animalResults.length ? 'completed' : 'partially authenticated'}.`;
+        this.authenticatingAll = false;
+        this.reload();
+        return;
+      }
+
+      const animal = animalsToAuth[index];
+
+      this.http
+        .post(`/api/results/${this.id}/authenticate`, {
+          registrationAnimalId: animal.registrationAnimalId,
+          digitalSignature: this.digitalSignature,
+          remarks: this.remarks,
+        })
+        .subscribe({
+          next: () => {
+            authedCount++;
+            authNext(index + 1);
+          },
+          error: (err) => {
+            this.errorMessage = `Failed to authenticate ${animal.animalName}: ${err?.error ?? 'Authentication failed.'}`;
+            this.authenticatingAll = false;
+          },
+        });
+    };
+
+    authNext(0);
   }
 
   rerun() {

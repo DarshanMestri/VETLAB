@@ -369,7 +369,7 @@ public sealed class WhatsAppMessagingService
             var payload = JsonSerializer.Deserialize<ReportPayload>(queue.PayloadJson ?? string.Empty)
                 ?? throw new InvalidOperationException("Queued report payload is invalid.");
 
-            var report = await _reports.GenerateAsync(payload.RegistrationItemId, payload.Format, ct)
+            var report = await _reports.GenerateAsync(payload.RegistrationItemId, payload.Format, null, false, ct)
                 ?? throw new InvalidOperationException("Queued report could not be generated.");
 
             attachmentContent = report.Content;

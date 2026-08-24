@@ -24,6 +24,123 @@ public class ResultsController : ControllerBase
         _db = db; _rr = rr; _reports = reports; _currentUserService = currentUserService;
     }
 
+    private async Task EnsureAnimalResultsAsync(int registrationItemId, int organizationId)
+    {
+        var item = await _db.RegistrationItems
+            .Include(ri => ri.Registration)
+                .ThenInclude(r => r.Animals)
+            .FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
+
+        if (item == null) return;
+
+        var existingResults = await _db.Results
+            .Where(r => r.RegistrationItemId == registrationItemId)
+            .ToListAsync();
+
+        var existingAnimalIds = existingResults
+            .Where(r => r.RegistrationAnimalId.HasValue)
+            .Select(r => r.RegistrationAnimalId!.Value)
+            .ToHashSet();
+
+        foreach (var animal in item.Registration.Animals)
+        {
+            if (!existingAnimalIds.Contains(animal.Id))
+            {
+                var newResult = new Result
+                {
+                    RegistrationItemId = registrationItemId,
+                    RegistrationAnimalId = animal.Id,
+                    LaboratoryId = item.LaboratoryId,
+                    BranchId = item.BranchId,
+                    OrganizationId = organizationId,
+                    StartedAt = DateTime.UtcNow
+                };
+                _db.Results.Add(newResult);
+            }
+        }
+
+        // Also migrate any generic result (no animalId) to first animal if no per-animal results exist yet
+        var genericResult = existingResults.FirstOrDefault(r => !r.RegistrationAnimalId.HasValue);
+        if (genericResult != null && item.Registration.Animals.Any())
+        {
+            var firstAnimal = item.Registration.Animals.First();
+            if (!existingAnimalIds.Contains(firstAnimal.Id))
+            {
+                genericResult.RegistrationAnimalId = firstAnimal.Id;
+                existingAnimalIds.Add(firstAnimal.Id);
+            }
+            else
+            {
+                // First animal already has a result - merge generic result data into existing one
+                var existingFirstAnimalResult = existingResults.First(r => r.RegistrationAnimalId == firstAnimal.Id);
+                
+                // Copy metadata from generic to existing if existing doesn't have it
+                if (existingFirstAnimalResult.StartedAt == default && genericResult.StartedAt != default)
+                    existingFirstAnimalResult.StartedAt = genericResult.StartedAt;
+                if (string.IsNullOrEmpty(existingFirstAnimalResult.Notes) && !string.IsNullOrEmpty(genericResult.Notes))
+                    existingFirstAnimalResult.Notes = genericResult.Notes;
+                if (existingFirstAnimalResult.TechnicianVerifiedAt == null && genericResult.TechnicianVerifiedAt != null)
+                {
+                    existingFirstAnimalResult.TechnicianVerifiedBy = genericResult.TechnicianVerifiedBy;
+                    existingFirstAnimalResult.TechnicianVerifiedById = genericResult.TechnicianVerifiedById;
+                    existingFirstAnimalResult.TechnicianVerifiedAt = genericResult.TechnicianVerifiedAt;
+                }
+                if (existingFirstAnimalResult.PathologistAuthenticatedAt == null && genericResult.PathologistAuthenticatedAt != null)
+                {
+                    existingFirstAnimalResult.PathologistAuthenticatedBy = genericResult.PathologistAuthenticatedBy;
+                    existingFirstAnimalResult.PathologistAuthenticatedById = genericResult.PathologistAuthenticatedById;
+                    existingFirstAnimalResult.PathologistAuthenticatedAt = genericResult.PathologistAuthenticatedAt;
+                }
+                if (string.IsNullOrEmpty(existingFirstAnimalResult.DigitalSignature) && !string.IsNullOrEmpty(genericResult.DigitalSignature))
+                    existingFirstAnimalResult.DigitalSignature = genericResult.DigitalSignature;
+                if (string.IsNullOrEmpty(existingFirstAnimalResult.VerificationRemarks) && !string.IsNullOrEmpty(genericResult.VerificationRemarks))
+                    existingFirstAnimalResult.VerificationRemarks = genericResult.VerificationRemarks;
+
+                // Copy values from generic to existing (only for parameters not already in existing)
+                var genericValues = await _db.ResultValues
+                    .Where(v => v.ResultId == genericResult.Id)
+                    .ToListAsync();
+
+                foreach (var gv in genericValues)
+                {
+                    var existingVal = await _db.ResultValues
+                        .FirstOrDefaultAsync(v => v.ResultId == existingFirstAnimalResult.Id && v.TestParameterId == gv.TestParameterId);
+                    
+                    if (existingVal == null)
+                    {
+                        var newVal = new ResultValue
+                        {
+                            ResultId = existingFirstAnimalResult.Id,
+                            TestParameterId = gv.TestParameterId,
+                            EntryType = gv.EntryType,
+                            NumericValue = gv.NumericValue,
+                            TextValue = gv.TextValue,
+                            PositiveNegativeValue = gv.PositiveNegativeValue,
+                            FormulaExpression = gv.FormulaExpression,
+                            FormulaResult = gv.FormulaResult,
+                            ImageUrl = gv.ImageUrl,
+                            PdfAttachmentUrl = gv.PdfAttachmentUrl,
+                            UnitSymbol = gv.UnitSymbol,
+                            IsLow = gv.IsLow,
+                            IsHigh = gv.IsHigh,
+                            IsOutOfRange = gv.IsOutOfRange,
+                            RangeMinDays = gv.RangeMinDays,
+                            RangeMaxDays = gv.RangeMaxDays,
+                            RangeLow = gv.RangeLow,
+                            RangeHigh = gv.RangeHigh
+                        };
+                        _db.ResultValues.Add(newVal);
+                    }
+                }
+
+                // Remove generic result
+                _db.Results.Remove(genericResult);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
     /// Worklist: filter by test, department, barcode, status, owner
     [HttpGet("worklist")]
     public async Task<ActionResult<IEnumerable<ResultWorkItemDto>>> Worklist(
@@ -130,10 +247,17 @@ public class ResultsController : ControllerBase
         return Ok(list);
     }
 
-    /// Load details to enter results (existing or blank)
+    /// Load details to enter results (per-animal results)
     [HttpGet("{registrationItemId:int}")]
     public async Task<ActionResult<ResultDetailDto>> Get(int registrationItemId)
     {
+        var organizationId = _currentUserService.OrganizationId;
+        if (!organizationId.HasValue)
+            return Forbid();
+
+        // Ensure per-animal result rows exist
+        await EnsureAnimalResultsAsync(registrationItemId, organizationId.Value);
+
         var item = await _db.RegistrationItems
             .Include(ri => ri.Registration)
                 .ThenInclude(r => r.Owner)
@@ -143,83 +267,83 @@ public class ResultsController : ControllerBase
             .FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
 
-        // ensure Result row exists
-        var result = await _db.Results
+        // Load all results for this item (one per animal)
+        var results = await _db.Results
             .Include(r => r.Values)
-            .FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
+            .Where(r => r.RegistrationItemId == registrationItemId)
+            .ToListAsync();
 
-        if (result is null)
-        {
-            result = new Result { RegistrationItemId = registrationItemId };
-            _db.Results.Add(result);
-            await _db.SaveChangesAsync();
-        }
-
-        // Build a logical list of parameters from Test
+        // Build parameter list from Test
         var parameters = await _db.TestParameters
             .Include(p => p.Unit)
             .Where(p => p.TestId == item.ItemId)
             .OrderBy(p => p.SortOrder)
             .ToListAsync();
 
-        var values = new List<ResultValueDto>();
-        var ageDays = item.Registration.Animals.FirstOrDefault()?.AgeInDays;
-        var speciesId = item.SpeciesId;
+        // Build animal results
+        var animalResults = new List<AnimalResultDto>();
 
-        foreach (var p in parameters)
+        foreach (var animal in item.Registration.Animals.OrderBy(a => a.Id))
         {
-            var existing = result.Values.FirstOrDefault(v => v.TestParameterId == p.Id);
+            var result = results.FirstOrDefault(r => r.RegistrationAnimalId == animal.Id);
+            
+            var values = new List<ResultValueDto>();
+            var ageDays = animal.AgeInDays;
+            var speciesId = item.SpeciesId;
 
-            var (minD, maxD, low, high) = await _rr.PickRangeAsync(p.Id, speciesId, ageDays);
-            decimal? num = existing?.NumericValue;
-            var flags = _rr.Evaluate(num, low, high);
+            foreach (var p in parameters)
+            {
+                var existing = result?.Values.FirstOrDefault(v => v.TestParameterId == p.Id);
 
-            values.Add(new ResultValueDto(
-                p.Id,
-                p.Name,
-                p.Unit?.Symbol,
-                existing?.EntryType ?? ResultEntryType.Numeric,
-                existing?.NumericValue,
-                existing?.TextValue,
-                existing?.PositiveNegativeValue,
-                existing?.FormulaExpression,
-                existing?.FormulaResult,
-                existing?.ImageUrl,
-                existing?.PdfAttachmentUrl,
-                minD, maxD, low, high,
-                flags.isLow, flags.isHigh, flags.outOf
+                var (minD, maxD, low, high) = await _rr.PickRangeAsync(p.Id, speciesId, ageDays);
+                decimal? num = existing?.NumericValue;
+                var flags = _rr.Evaluate(num, low, high);
+
+                values.Add(new ResultValueDto(
+                    p.Id,
+                    p.Name,
+                    p.Unit?.Symbol,
+                    existing?.EntryType ?? ResultEntryType.Numeric,
+                    existing?.NumericValue,
+                    existing?.TextValue,
+                    existing?.PositiveNegativeValue,
+                    existing?.FormulaExpression,
+                    existing?.FormulaResult,
+                    existing?.ImageUrl,
+                    existing?.PdfAttachmentUrl,
+                    minD, maxD, low, high,
+                    flags.isLow, flags.isHigh, flags.outOf
+                ));
+            }
+
+            animalResults.Add(new AnimalResultDto(
+                animal.Id,
+                animal.AnimalId ?? 0,
+                animal.AnimalName,
+                animal.Species?.Name,
+                animal.AgeInDays,
+                values,
+                result?.TechnicianVerifiedAt != null,
+                result?.PathologistAuthenticatedAt != null,
+                result?.TechnicianVerifiedBy,
+                result?.TechnicianVerifiedAt,
+                result?.PathologistAuthenticatedBy,
+                result?.PathologistAuthenticatedAt,
+                result?.DigitalSignature,
+                result?.VerificationRemarks,
+                result?.Notes
             ));
         }
-
-        // Build animal list
-        var animals = item.Registration.Animals
-            .OrderBy(a => a.Id)
-            .Select(a => new ResultAnimalDto(
-                a.Id,
-                a.AnimalName,
-                a.SpeciesId,
-                a.Species?.Name,
-                a.AnimalId,
-                a.AgeInDays
-            ))
-            .ToList();
 
         var owner = item.Registration.Owner;
 
         return Ok(new ResultDetailDto(
             item.Id,
             item.ItemBarcode,
-            result.Notes,
+            animalResults.FirstOrDefault()?.Notes,
             item.SampleStatus.ToString(),
             item.Status.ToString(),
-            result.TechnicianVerifiedBy,
-            result.TechnicianVerifiedAt,
-            result.PathologistAuthenticatedBy,
-            result.PathologistAuthenticatedAt,
-            result.DigitalSignature,
-            result.VerificationRemarks,
-            values,
-            animals,
+            animalResults,
             item.Registration.OwnerName,
             item.Registration.OwnerNameAr,
             item.Registration.OwnerMobile,
@@ -232,27 +356,7 @@ public class ResultsController : ControllerBase
             item.RerunAt));
     }
 
-    [HttpGet("{registrationItemId:int}/report")]
-    public async Task<ActionResult> Report(int registrationItemId, [FromQuery] string? format, CancellationToken cancellationToken)
-    {
-        ResultReportFile? report;
-
-        try
-        {
-            report = await _reports.GenerateAsync(registrationItemId, format, cancellationToken);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-
-        if (report is null)
-            return NotFound();
-
-        return File(report.Content, report.ContentType, report.FileName);
-    }
-
-    /// Save (upsert) values for an item, auto-flag using reference ranges
+    /// Save (upsert) values for a specific animal, auto-flag using reference ranges
     [HttpPost("{registrationItemId:int}/enter")]
     public async Task<ActionResult> Enter(int registrationItemId, [FromBody] ResultEntryDto dto)
     {
@@ -279,20 +383,33 @@ public class ResultsController : ControllerBase
         if (item.SampleStatus < SampleWorkflowStatus.Processing)
             item.SampleStatus = SampleWorkflowStatus.Processing;
 
-        // update animal age if provided (first animal only for simplicity)
-        var firstAnimal = await _db.RegistrationAnimals.FirstOrDefaultAsync(a => a.RegistrationId == item.RegistrationId);
-        if (firstAnimal != null && dto.AgeInDays.HasValue) firstAnimal.AgeInDays = dto.AgeInDays;
+        // Ensure per-animal results exist
+        await EnsureAnimalResultsAsync(registrationItemId, organizationId.Value);
 
-        var result = await _db.Results.Include(r => r.Values).FirstOrDefaultAsync(r => r.RegistrationItemId == item.Id);
+        // Find the result for the specific animal
+        var animalId = dto.RegistrationAnimalId;
+        if (!animalId.HasValue)
+            return BadRequest("RegistrationAnimalId is required for per-animal result entry.");
+
+        var result = await _db.Results
+            .Include(r => r.Values)
+            .FirstOrDefaultAsync(r => r.RegistrationItemId == item.Id && r.RegistrationAnimalId == animalId.Value);
+
         if (result is null)
         {
-            result = new Result { RegistrationItemId = item.Id };
-            _db.Results.Add(result);
-            await _db.SaveChangesAsync();
-            _db.Entry(result).Collection(r => r.Values).Load();
+            return NotFound($"Result for animal {animalId} not found.");
         }
 
         result.Notes = dto.Notes?.Trim();
+
+        // Get the animal for age/species
+        var animal = await _db.RegistrationAnimals.FirstOrDefaultAsync(a => a.Id == animalId.Value);
+        var speciesId = item.SpeciesId ?? animal?.SpeciesId;
+        var ageDaysForRange = animal?.AgeInDays ?? dto.AgeInDays;
+
+        // Update animal age if provided
+        if (animal != null && dto.AgeInDays.HasValue) 
+            animal.AgeInDays = dto.AgeInDays;
 
         // upsert each value and compute flags
         foreach (var v in dto.Values)
@@ -317,9 +434,6 @@ public class ResultsController : ControllerBase
             rv.PdfAttachmentUrl = v.PdfAttachmentUrl?.Trim();
             rv.UnitSymbol = param.Unit?.Symbol;
 
-            var speciesId = item.SpeciesId;
-            var ageDaysForRange = firstAnimal?.AgeInDays;
-
             var (minD, maxD, low, high) = await _rr.PickRangeAsync(param.Id, speciesId, ageDaysForRange);
             rv.RangeMinDays = minD; rv.RangeMaxDays = maxD;
             rv.RangeLow = low; rv.RangeHigh = high;
@@ -335,7 +449,7 @@ public class ResultsController : ControllerBase
         return NoContent();
     }
 
-    /// Technician verification — auto-captures the logged-in user
+    /// Technician verification for a specific animal
     [HttpPost("{registrationItemId:int}/verify")]
     public async Task<ActionResult> Verify(int registrationItemId, [FromBody] ResultVerificationDto dto)
     {
@@ -344,7 +458,11 @@ public class ResultsController : ControllerBase
         if (userId == null || string.IsNullOrWhiteSpace(userName))
             return BadRequest("Authenticated user context is required for verification.");
 
-        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
+        if (!dto.RegistrationAnimalId.HasValue)
+            return BadRequest("RegistrationAnimalId is required for per-animal verification.");
+
+        var result = await _db.Results
+            .FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId == dto.RegistrationAnimalId.Value);
         if (result is null) return NotFound();
 
         result.TechnicianVerifiedBy = userName;
@@ -355,7 +473,37 @@ public class ResultsController : ControllerBase
         return NoContent();
     }
 
-    /// Pathologist authentication — auto-captures the logged-in user AND auto-completes the item
+    /// Bulk verify all animals for this test
+    [HttpPost("{registrationItemId:int}/verify-all")]
+    public async Task<ActionResult> VerifyAll(int registrationItemId)
+    {
+        var userId = _currentUserService.UserId;
+        var userName = _currentUserService.UserName;
+        if (userId == null || string.IsNullOrWhiteSpace(userName))
+            return BadRequest("Authenticated user context is required for verification.");
+
+        var results = await _db.Results
+            .Where(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId != null)
+            .ToListAsync();
+
+        if (!results.Any())
+            return NotFound("No results found for this test.");
+
+        foreach (var result in results)
+        {
+            if (result.TechnicianVerifiedAt == null)
+            {
+                result.TechnicianVerifiedBy = userName;
+                result.TechnicianVerifiedById = userId;
+                result.TechnicianVerifiedAt = DateTime.UtcNow;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// Pathologist authentication for a specific animal
     [HttpPost("{registrationItemId:int}/authenticate")]
     public async Task<ActionResult> Authenticate(int registrationItemId, [FromBody] ResultAuthenticationDto dto)
     {
@@ -369,10 +517,14 @@ public class ResultsController : ControllerBase
         if (!roles.Any(r => r == "Admin" || r == "Manager"))
             return Forbid("Only Admin or Manager users may authenticate results.");
 
+        if (!dto.RegistrationAnimalId.HasValue)
+            return BadRequest("RegistrationAnimalId is required for per-animal authentication.");
+
         var item = await _db.RegistrationItems.FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
 
-        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
+        var result = await _db.Results
+            .FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId == dto.RegistrationAnimalId.Value);
         if (result is null) return NotFound();
         if (result.TechnicianVerifiedAt is null)
             return BadRequest("Technician verification is required before authentication.");
@@ -384,13 +536,51 @@ public class ResultsController : ControllerBase
         result.DigitalSignature = dto.DigitalSignature?.Trim();
         result.VerificationRemarks = dto.Remarks?.Trim() ?? result.VerificationRemarks;
 
-        // Auto-complete: authentication completes the test
-        item.Status = RegItemStatus.Completed;
-        item.SampleStatus = SampleWorkflowStatus.Processed;
-        result.CompletedAt = DateTime.UtcNow;
+        // Check if all animals are now authenticated to complete the test
+        var allAnimalResults = await _db.Results
+            .Where(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId != null)
+            .ToListAsync();
+
+        var allAuthenticated = allAnimalResults.All(r => r.PathologistAuthenticatedAt != null);
+        if (allAuthenticated && allAnimalResults.Any())
+        {
+            item.Status = RegItemStatus.Completed;
+            item.SampleStatus = SampleWorkflowStatus.Processed;
+            foreach (var r in allAnimalResults)
+            {
+                if (r.CompletedAt == null)
+                    r.CompletedAt = DateTime.UtcNow;
+            }
+        }
 
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// Report generation with optional animal filter and combined option
+    [HttpGet("{registrationItemId:int}/report")]
+    public async Task<ActionResult> Report(
+        int registrationItemId, 
+        [FromQuery] string? format, 
+        [FromQuery] int? animalId,
+        [FromQuery] bool combined = false,
+        CancellationToken cancellationToken = default)
+    {
+        ResultReportFile? report;
+
+        try
+        {
+            report = await _reports.GenerateAsync(registrationItemId, format, animalId, combined, cancellationToken);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        if (report is null)
+            return NotFound();
+
+        return File(report.Content, report.ContentType, report.FileName);
     }
 
     /// Re-run: move a completed/authenticated result back to InProgress for the technician
@@ -417,9 +607,12 @@ public class ResultsController : ControllerBase
         item.RerunInitiatedBy = userName;
         item.RerunAt = DateTime.UtcNow;
 
-        // Clear authentication/verification so they must be re-done
-        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
-        if (result != null)
+        // Clear authentication/verification for ALL animals so they must be re-done
+        var results = await _db.Results
+            .Where(r => r.RegistrationItemId == registrationItemId)
+            .ToListAsync();
+
+        foreach (var result in results)
         {
             result.TechnicianVerifiedBy = null;
             result.TechnicianVerifiedById = null;
@@ -454,8 +647,16 @@ public class ResultsController : ControllerBase
 
         item.Status = RegItemStatus.Completed;
         item.SampleStatus = SampleWorkflowStatus.Processed;
-        var result = await _db.Results.FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId);
-        if (result != null) result.CompletedAt = DateTime.UtcNow;
+        
+        var results = await _db.Results
+            .Where(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId != null)
+            .ToListAsync();
+        
+        foreach (var result in results)
+        {
+            if (result.CompletedAt == null)
+                result.CompletedAt = DateTime.UtcNow;
+        }
 
         await _db.SaveChangesAsync();
         return NoContent();

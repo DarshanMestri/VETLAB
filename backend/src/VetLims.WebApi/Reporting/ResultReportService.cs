@@ -28,15 +28,26 @@ public sealed class ResultReportService
         _environment = environment;
     }
 
-    public async Task<ResultReportFile?> GenerateAsync(int registrationItemId, string? format, CancellationToken cancellationToken = default)
+    public async Task<ResultReportFile?> GenerateAsync(int registrationItemId, string? format, int? animalId = null, bool combined = false, CancellationToken cancellationToken = default)
     {
         var reportFormat = ParseFormat(format);
-        var model = await BuildModelAsync(registrationItemId, cancellationToken);
+        var model = await BuildModelAsync(registrationItemId, animalId, combined, cancellationToken);
         if (model is null)
             return null;
 
         var document = new ResultReportDocument(model);
         var fileNameBase = $"result-{SanitizeFileName(model.ItemBarcode)}";
+
+        if (animalId.HasValue && !combined)
+        {
+            var animal = model.Animals.FirstOrDefault(a => a.Id == animalId);
+            if (animal != null)
+                fileNameBase += $"-{SanitizeFileName(animal.Name)}";
+        }
+        else if (combined)
+        {
+            fileNameBase += "-combined";
+        }
 
         return reportFormat switch
         {
@@ -72,7 +83,7 @@ public sealed class ResultReportService
         return images[0];
     }
 
-    private async Task<ResultReportModel?> BuildModelAsync(int registrationItemId, CancellationToken cancellationToken)
+    private async Task<ResultReportModel?> BuildModelAsync(int registrationItemId, int? animalId, bool combined, CancellationToken cancellationToken)
     {
         var item = await _db.RegistrationItems
             .AsNoTracking()
@@ -105,13 +116,15 @@ public sealed class ResultReportService
         if (item is null || item.ItemType != RegItemType.Test)
             return null;
 
-        var result = await _db.Results
+        // Load all results for this item (one per animal)
+        var results = await _db.Results
             .AsNoTracking()
             .Include(x => x.Values)
                 .ThenInclude(x => x.TestParameter)
-            .FirstOrDefaultAsync(x => x.RegistrationItemId == registrationItemId, cancellationToken);
+            .Where(x => x.RegistrationItemId == registrationItemId)
+            .ToListAsync(cancellationToken);
 
-        if (result is null)
+        if (!results.Any())
             return null;
 
         var test = await _db.Tests
@@ -123,16 +136,41 @@ public sealed class ResultReportService
             return null;
 
         var laboratory = item.Laboratory;
-        if (laboratory is null && result.LaboratoryId.HasValue)
-            laboratory = await _db.Laboratories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == result.LaboratoryId.Value, cancellationToken);
+        if (laboratory is null && results.First().LaboratoryId.HasValue)
+            laboratory = await _db.Laboratories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == results.First().LaboratoryId.Value, cancellationToken);
         laboratory ??= await _db.Laboratories.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Id).FirstOrDefaultAsync(cancellationToken);
 
-        var qrCodeBytes = BuildQrCodeBytes(item, result);
-        var logoAsset = ResolveAsset(laboratory?.Logo);
-        var signatureAsset = ResolveAsset(result.DigitalSignature ?? laboratory?.DigitalSignature);
+        // Filter animals and results based on parameters
+        var allAnimals = item.Registration.Animals.OrderBy(x => x.Id).ToList();
+        var filteredAnimals = allAnimals;
+        
+        Result? primaryResult = null;
+        
+        if (animalId.HasValue && !combined)
+        {
+            filteredAnimals = allAnimals.Where(a => a.Id == animalId.Value).ToList();
+            primaryResult = results.FirstOrDefault(r => r.RegistrationAnimalId == animalId.Value);
+        }
+        else if (combined)
+        {
+            // For combined report, use the first result as primary (for metadata)
+            primaryResult = results.FirstOrDefault();
+        }
+        else
+        {
+            // Default: first animal
+            primaryResult = results.FirstOrDefault(r => r.RegistrationAnimalId == allAnimals.First().Id) 
+                ?? results.FirstOrDefault();
+        }
 
-        var animals = item.Registration.Animals
-            .OrderBy(x => x.Id)
+        if (primaryResult == null)
+            return null;
+
+        var qrCodeBytes = BuildQrCodeBytes(item, primaryResult);
+        var logoAsset = ResolveAsset(laboratory?.Logo);
+        var signatureAsset = ResolveAsset(primaryResult.DigitalSignature ?? laboratory?.DigitalSignature);
+
+        var animals = filteredAnimals
             .Select(x =>
             {
                 var animal = x.Animal;
@@ -140,6 +178,7 @@ public sealed class ResultReportService
                 var ageText = x.AgeInDays.HasValue ? $"{x.AgeInDays.Value} days" : null;
 
                 return new ResultReportAnimal(
+                    x.Id,
                     animal?.Code,
                     x.AnimalName,
                     animal?.Species?.Name ?? item.Species?.Name,
@@ -154,18 +193,57 @@ public sealed class ResultReportService
             })
             .ToList();
 
-        var rows = result.Values
-            .OrderBy(x => x.TestParameter.SortOrder)
-            .ThenBy(x => x.TestParameter.Name)
-            .Select(x => new ResultReportRow(
-                x.TestParameter.Name,
-                FormatValue(x),
-                x.UnitSymbol,
-                FormatReferenceRange(x),
-                FormatFlag(x),
-                x.EntryType == ResultEntryType.Image ? ResolveAsset(x.ImageUrl) : null,
-                x.EntryType == ResultEntryType.Pdf ? x.PdfAttachmentUrl : null))
-            .ToList();
+        // Build rows - for combined report, we need to show all animals' results
+        var rows = new List<ResultReportRow>();
+        
+        if (combined)
+        {
+            // For combined report, show each parameter per animal
+            var parameters = await _db.TestParameters
+                .AsNoTracking()
+                .Include(p => p.Unit)
+                .Where(p => p.TestId == item.ItemId)
+                .OrderBy(p => p.SortOrder)
+                .ToListAsync(cancellationToken);
+
+            foreach (var animal in filteredAnimals)
+            {
+                var animalResult = results.FirstOrDefault(r => r.RegistrationAnimalId == animal.Id);
+                if (animalResult == null) continue;
+
+                foreach (var p in parameters)
+                {
+                    var existing = animalResult.Values.FirstOrDefault(v => v.TestParameterId == p.Id);
+                    var displayName = $"{animal.AnimalName} - {p.Name}";
+                    
+                    rows.Add(new ResultReportRow(
+                        displayName,
+                        FormatValue(existing, p),
+                        p.Unit?.Symbol,
+                        FormatReferenceRange(existing, p),
+                        FormatFlag(existing),
+                        existing?.EntryType == ResultEntryType.Image ? ResolveAsset(existing.ImageUrl) : null,
+                        existing?.EntryType == ResultEntryType.Pdf ? existing.PdfAttachmentUrl : null));
+                }
+            }
+        }
+        else
+        {
+            // Single animal report
+            var animalResult = primaryResult;
+            rows = animalResult.Values
+                .OrderBy(x => x.TestParameter.SortOrder)
+                .ThenBy(x => x.TestParameter.Name)
+                .Select(x => new ResultReportRow(
+                    x.TestParameter.Name,
+                    FormatValue(x),
+                    x.UnitSymbol,
+                    FormatReferenceRange(x),
+                    FormatFlag(x),
+                    x.EntryType == ResultEntryType.Image ? ResolveAsset(x.ImageUrl) : null,
+                    x.EntryType == ResultEntryType.Pdf ? x.PdfAttachmentUrl : null))
+                .ToList();
+        }
 
         return new ResultReportModel(
             ClinicName: laboratory?.Name ?? "Clinic",
@@ -176,7 +254,7 @@ public sealed class ResultReportService
             ClinicFooter: laboratory?.ReportFooter,
             ClinicLogo: logoAsset,
             Signature: signatureAsset,
-            SignatureLabel: result.PathologistAuthenticatedBy ?? result.TechnicianVerifiedBy,
+            SignatureLabel: primaryResult.PathologistAuthenticatedBy ?? primaryResult.TechnicianVerifiedBy,
             OwnerCode: item.Registration.Owner?.Code,
             OwnerName: item.Registration.Owner?.Name ?? item.Registration.OwnerName,
             OwnerMobile: item.Registration.Owner?.Mobile,
@@ -197,19 +275,22 @@ public sealed class ResultReportService
             CollectedAt: item.SampleCollectedAt,
             ReceivedAt: item.SampleReceivedAt,
             ProcessedAt: item.SampleProcessedAt,
-            ReportedAt: result.CompletedAt ?? result.ModifiedDate ?? result.CreatedDate,
-            Interpretation: result.Notes,
-            VerificationRemarks: result.VerificationRemarks,
-            TechnicianVerifiedBy: result.TechnicianVerifiedBy,
-            TechnicianVerifiedAt: result.TechnicianVerifiedAt,
-            PathologistAuthenticatedBy: result.PathologistAuthenticatedBy,
-            PathologistAuthenticatedAt: result.PathologistAuthenticatedAt,
+            ReportedAt: primaryResult.CompletedAt ?? primaryResult.ModifiedDate ?? primaryResult.CreatedDate,
+            Interpretation: primaryResult.Notes,
+            VerificationRemarks: primaryResult.VerificationRemarks,
+            TechnicianVerifiedBy: primaryResult.TechnicianVerifiedBy,
+            TechnicianVerifiedAt: primaryResult.TechnicianVerifiedAt,
+            PathologistAuthenticatedBy: primaryResult.PathologistAuthenticatedBy,
+            PathologistAuthenticatedAt: primaryResult.PathologistAuthenticatedAt,
             QrCodeBytes: qrCodeBytes,
             Rows: rows);
     }
 
-    private static string FormatValue(ResultValue value)
+    private static string FormatValue(ResultValue? value, TestParameter? param = null)
     {
+        if (value == null)
+            return string.Empty;
+
         return value.EntryType switch
         {
             ResultEntryType.Numeric => value.NumericValue?.ToString("0.##") ?? string.Empty,
@@ -224,8 +305,11 @@ public sealed class ResultReportService
         };
     }
 
-    private static string FormatReferenceRange(ResultValue value)
+    private static string FormatReferenceRange(ResultValue? value, TestParameter? param = null)
     {
+        if (value == null)
+            return "—";
+
         if (value.RangeLow is null && value.RangeHigh is null)
             return "—";
 
@@ -236,8 +320,11 @@ public sealed class ResultReportService
         return $"{range} ({value.RangeMinDays?.ToString() ?? "-"}–{value.RangeMaxDays?.ToString() ?? "-"} d)";
     }
 
-    private static string FormatFlag(ResultValue value)
+    private static string FormatFlag(ResultValue? value)
     {
+        if (value == null)
+            return string.Empty;
+            
         if (value.IsLow == true) return "LOW";
         if (value.IsHigh == true) return "HIGH";
         if (value.IsOutOfRange == true) return "OUT";
@@ -346,6 +433,7 @@ internal sealed record ResultReportModel(
     IReadOnlyList<ResultReportRow> Rows);
 
 internal sealed record ResultReportAnimal(
+    int Id,
     string? Code,
     string Name,
     string? Species,
