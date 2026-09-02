@@ -349,7 +349,58 @@ public record ResultDetailDto(
     int? ClientId = null,
     string? RerunReason = null,
     string? RerunInitiatedBy = null,
-    DateTime? RerunAt = null
+    DateTime? RerunAt = null,
+    IEnumerable<ResultOrderedItemDto>? OrderedTests = null
+);
+
+public record ResultOrderedItemDto(
+    int RegistrationItemId,
+    int ItemType,
+    int? TestId,
+    string ItemName,
+    string? ItemCode,
+    string Status,
+    bool IsCurrent
+);
+
+public record TestEntryGroupDto(
+    int RegistrationItemId,
+    int? TestId,
+    string TestName,
+    string? ItemCode,
+    string ItemBarcode,
+    string Status,
+    bool IsVerified,
+    bool IsAuthenticated,
+    string? TechnicianVerifiedBy,
+    DateTime? TechnicianVerifiedAt,
+    string? PathologistAuthenticatedBy,
+    DateTime? PathologistAuthenticatedAt,
+    string? DigitalSignature,
+    string? VerificationRemarks,
+    string? Notes,
+    IEnumerable<ResultValueDto> Values
+);
+
+public record AnimalEntryGroupDto(
+    int RegistrationAnimalId,
+    int AnimalId,
+    string AnimalName,
+    string? SpeciesName,
+    int? AgeInDays,
+    IEnumerable<TestEntryGroupDto> Tests
+);
+
+public record ResultEntryGroupDto(
+    int RegistrationId,
+    string RegistrationBarcode,
+    string? OwnerName,
+    string? OwnerNameAr,
+    string? OwnerMobile,
+    string? OwnerEmail,
+    string? OwnerCode,
+    IEnumerable<AnimalEntryGroupDto> Animals,
+    IEnumerable<ResultOrderedItemDto> OrderedTests
 );
 
 // payload to save values
@@ -377,6 +428,6 @@ public record ResultEntryValue(
 public record SampleWorkflowUpdateDto(string? Notes = null);
 public record ResultVerificationDto(int? RegistrationAnimalId, string? Remarks = null);
 public record ResultAuthenticationDto(int? RegistrationAnimalId, string? DigitalSignature = null, string? Remarks = null);
-public record ResultRerunDto(string? Reason = null);
+public record ResultRerunDto(string? Reason = null, int RegistrationAnimalId = 0);
 
 public record ResultReportQueryDto(int? AnimalId = null, bool Combined = false);

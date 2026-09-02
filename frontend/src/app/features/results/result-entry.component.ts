@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -36,13 +36,23 @@ type ValueRow = {
   isOutOfRange?: boolean | null;
 };
 
-type AnimalResult = {
-  registrationAnimalId: number;
-  animalId: number;
-  animalName: string;
-  speciesName?: string;
-  ageInDays?: number;
-  values: ValueRow[];
+type OrderedTest = {
+  registrationItemId: number;
+  itemType: number;
+  testId?: number;
+  itemName: string;
+  itemCode?: string;
+  status: string;
+  isCurrent: boolean;
+};
+
+type TestEntry = {
+  registrationItemId: number;
+  testId?: number;
+  testName: string;
+  itemCode?: string;
+  itemBarcode: string;
+  status: string;
   isVerified: boolean;
   isAuthenticated: boolean;
   technicianVerifiedBy?: string | null;
@@ -52,24 +62,35 @@ type AnimalResult = {
   digitalSignature?: string | null;
   verificationRemarks?: string | null;
   notes?: string | null;
+  values: ValueRow[];
+  isDirty?: boolean;
+};
+
+type AnimalEntry = {
+  registrationAnimalId: number;
+  animalId: number;
+  animalName: string;
+  speciesName?: string;
+  ageInDays?: number;
+  tests: TestEntry[];
+  isDirty?: boolean;
 };
 
 type Detail = {
-  registrationItemId: number;
-  itemBarcode: string;
-  sampleStatus: string;
-  status: string;
-  animalResults: AnimalResult[];
+  registrationId: number;
+  registrationBarcode: string;
   ownerName?: string;
   ownerNameAr?: string;
   ownerMobile?: string;
   ownerEmail?: string;
   ownerCode?: string;
-  ownerId?: number;
-  clientId?: number;
-  rerunReason?: string | null;
-  rerunInitiatedBy?: string | null;
-  rerunAt?: string | null;
+  animals: AnimalEntry[];
+  orderedTests?: OrderedTest[];
+};
+
+type RerunTarget = {
+  animal: AnimalEntry;
+  test: TestEntry;
 };
 
 @Component({
@@ -78,26 +99,17 @@ type Detail = {
   imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="container py-3" *ngIf="detail">
-      <!-- HEADER: Test info + status badge + Back -->
+      <!-- HEADER: Test context + status badge + Back -->
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
           <h3 class="mb-1">
             <span *ngIf="testName">{{ testName }}</span>
             <span *ngIf="!testName">Result Entry</span>
-            <small class="text-muted ms-2">({{ detail.itemBarcode }})</small>
+            <small class="text-muted ms-2">({{ detail.registrationBarcode }})</small>
           </h3>
           <div class="small text-muted">
-            <span class="badge ms-2"
-              [ngClass]="{
-                'bg-warning text-dark': detail.status === 'Pending',
-                'bg-info text-dark': detail.status === 'InProgress',
-                'bg-success': detail.status === 'Completed'
-              }">
-              {{ detail.status }}
-            </span>
-            <span *ngIf="detail.rerunReason" class="badge ms-2" style="background-color:rgba(255,148,120,.18);color:#b85c43;font-weight:600">
-              Re-run
-            </span>
+            Ordered tests: <strong>{{ detail.animals[0]?.tests?.length ?? 0 }}</strong>
+            • Animals: <strong>{{ detail.animals?.length ?? 0 }}</strong>
           </div>
         </div>
         <a class="btn btn-outline-secondary btn-sm" routerLink="/results">Back</a>
@@ -137,29 +149,40 @@ type Detail = {
         </div>
       </div>
 
-      <!-- ANIMAL TABS with per-animal status badges -->
-      <div class="card mb-3" *ngIf="detail.animalResults && detail.animalResults.length > 0">
-        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-          <strong>Animals ({{ detail.animalResults.length }})</strong>
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary btn-sm" (click)="saveAll()" [disabled]="savingAll">
-              <span *ngIf="savingAll" class="spinner-border spinner-border-sm me-1"></span>
-              Save All
-            </button>
-            <button class="btn btn-outline-info btn-sm" (click)="verifyAll()" [disabled]="verifyingAll">
-              <span *ngIf="verifyingAll" class="spinner-border spinner-border-sm me-1"></span>
-              Verify All
-            </button>
-            <button class="btn btn-outline-success btn-sm" (click)="authenticateAll()" [disabled]="authenticatingAll" *ngIf="canAuthenticate">
-              <span *ngIf="authenticatingAll" class="spinner-border spinner-border-sm me-1"></span>
-              Authenticate All
-            </button>
-          </div>
+      <!-- ORDERED TESTS (all tests for this registration, switchable to their own pages) -->
+      <div class="card mb-3" *ngIf="detail.orderedTests && detail.orderedTests.length > 1">
+        <div class="card-header py-2">
+          <strong>Ordered Tests</strong>
         </div>
         <div class="card-body py-2">
           <div class="d-flex flex-wrap gap-2">
             <button
-              *ngFor="let animal of detail.animalResults; let i = index"
+              *ngFor="let ot of detail.orderedTests"
+              type="button"
+              class="btn btn-sm"
+              [disabled]="ot.isCurrent"
+              [ngClass]="ot.isCurrent ? 'btn-primary' : 'btn-outline-primary'"
+              (click)="switchTest(ot.registrationItemId)">
+              {{ ot.itemName }}<span *ngIf="ot.itemCode" class="ms-1 small opacity-75">({{ ot.itemCode }})</span>
+              <span class="badge ms-1" [ngClass]="testStatusClass(ot.status)">{{ ot.status }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANIMAL TABS on top -->
+      <div class="card mb-3" *ngIf="detail.animals && detail.animals.length > 0">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <strong>Animals ({{ detail.animals.length }})</strong>
+          <button *ngIf="showSaveAll" class="btn btn-outline-primary btn-sm" (click)="saveAll()" [disabled]="savingAll">
+            <span *ngIf="savingAll" class="spinner-border spinner-border-sm me-1"></span>
+            Save All ({{ selectedAnimal?.animalName }})
+          </button>
+        </div>
+        <div class="card-body py-2">
+          <div class="d-flex flex-wrap gap-2">
+            <button
+              *ngFor="let animal of detail.animals; let i = index"
               class="btn btn-sm"
               [ngClass]="{
                 'btn-primary': selectedAnimalIndex === i,
@@ -167,212 +190,210 @@ type Detail = {
               }"
               (click)="selectAnimal(i)">
               {{ animal.animalName }} ({{ animal.speciesName || 'Unknown' }})
-              <span *ngIf="animal.ageInDays != null" class="ms-1 text-muted">
-                • {{ animal.ageInDays }}d
-              </span>
-              <span *ngIf="animal.isVerified" class="badge bg-success ms-1">Verified</span>
-              <span *ngIf="animal.isAuthenticated" class="badge bg-info text-dark ms-1">Authenticated</span>
-              <span *ngIf="!animal.isVerified && !animal.isAuthenticated" class="badge bg-secondary ms-1">Draft</span>
+              <span *ngIf="animal.ageInDays != null" class="ms-1 text-muted">• {{ animal.ageInDays }}d</span>
+              <span *ngIf="animal.isDirty" class="badge bg-warning text-dark ms-1">Edits</span>
             </button>
           </div>
           <div *ngIf="selectedAnimal" class="mt-2 small text-muted">
             Selected: <strong>{{ selectedAnimal.animalName }}</strong>
             ({{ selectedAnimal.speciesName || 'Unknown' }})
             <span *ngIf="selectedAnimal.ageInDays != null"> • Age: {{ selectedAnimal.ageInDays }} days</span>
+            • Tests: <strong>{{ selectedAnimal.tests?.length ?? 0 }}</strong>
           </div>
         </div>
       </div>
 
-      <!-- RE-RUN INFO -->
-      <div class="alert alert-warning" *ngIf="detail.rerunReason">
-        <strong>Re-run initiated</strong> by {{ detail.rerunInitiatedBy }}
-        <span *ngIf="detail.rerunAt"> on {{ detail.rerunAt | date:'medium' }}</span>
-        <br *ngIf="detail.rerunReason" />
-        <span *ngIf="detail.rerunReason">Reason: {{ detail.rerunReason }}</span>
-      </div>
+      <!-- PER-TEST CARDS for the selected animal -->
+      <ng-container *ngIf="selectedAnimal">
+        <div *ngFor="let test of selectedAnimal.tests; trackBy: trackByItem" class="card mb-3">
+          <div class="card-header py-2 bg-primary text-white d-flex justify-content-between align-items-center">
+            <strong>
+              {{ test.testName }}
+              <small *ngIf="test.itemBarcode" class="ms-2 opacity-75">({{ test.itemBarcode }})</small>
+            </strong>
+            <span class="badge" [ngClass]="testStatusClass(test.status)">{{ test.status }}</span>
+          </div>
 
-      <!-- INTERPRETATION -->
-      <div class="card mb-3">
-        <div class="card-body py-2">
-          <div class="row g-2">
-            <div class="col-md-12">
-              <label class="form-label">Interpretation / Notes</label>
-              <textarea class="form-control" rows="2" [(ngModel)]="selectedAnimalNotes" name="notes"></textarea>
+          <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <strong>Results for {{ selectedAnimal.animalName }}</strong>
+              <small class="text-muted">Test: {{ test.testName }}</small>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- RESULT ENTRY TABLE - grouped by test name (single test for now) -->
-      <div class="card mb-3">
-        <div class="card-header py-2">
-          <strong>Results for {{ selectedAnimal?.animalName || 'selected animal' }}</strong>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Parameter</th>
-                  <th style="width: 20%">Type</th>
-                  <th style="width: 35%">Result</th>
-                  <th>Range</th>
-                  <th>Flag</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let value of selectedAnimal?.values">
-                  <td>
-                    <div>{{ value.parameterName }}</div>
-                    <small class="text-muted">{{ value.unitSymbol || 'No unit' }}</small>
-                  </td>
-                  <td>
-                    <select class="form-select form-select-sm" [(ngModel)]="value.entryType" [name]="'entryType' + value.testParameterId">
-                      <option [ngValue]="entryTypes.Numeric">Numeric</option>
-                      <option [ngValue]="entryTypes.Text">Text</option>
-                      <option [ngValue]="entryTypes.PositiveNegative">Positive / Negative</option>
-                      <option [ngValue]="entryTypes.Formula">Formula</option>
-                      <option [ngValue]="entryTypes.Image">Image URL</option>
-                      <option [ngValue]="entryTypes.Pdf">PDF URL</option>
-                    </select>
-                  </td>
-                  <td>
-                    <ng-container [ngSwitch]="value.entryType">
-                      <input *ngSwitchCase="entryTypes.Numeric" type="number" class="form-control form-control-sm" [(ngModel)]="value.numericValue" [name]="'numeric' + value.testParameterId" />
-                      <input *ngSwitchCase="entryTypes.Text" type="text" class="form-control form-control-sm" [(ngModel)]="value.textValue" [name]="'text' + value.testParameterId" />
-                      <select *ngSwitchCase="entryTypes.PositiveNegative" class="form-select form-select-sm" [(ngModel)]="value.positiveNegativeValue" [name]="'pn' + value.testParameterId">
-                        <option [ngValue]="null">Select</option>
-                        <option value="Positive">Positive</option>
-                        <option value="Negative">Negative</option>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Parameter</th>
+                    <th style="width: 20%">Type</th>
+                    <th style="width: 35%">Result</th>
+                    <th>Range</th>
+                    <th>Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let value of test.values; trackBy: trackByValue">
+                    <td>
+                      <div>{{ value.parameterName }}</div>
+                      <small class="text-muted">{{ value.unitSymbol || 'No unit' }}</small>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" [(ngModel)]="value.entryType" [name]="'entryType' + test.registrationItemId + '_' + value.testParameterId" (ngModelChange)="markDirty()">
+                        <option [ngValue]="entryTypes.Numeric">Numeric</option>
+                        <option [ngValue]="entryTypes.Text">Text</option>
+                        <option [ngValue]="entryTypes.PositiveNegative">Positive / Negative</option>
+                        <option [ngValue]="entryTypes.Formula">Formula</option>
+                        <option [ngValue]="entryTypes.Image">Image URL</option>
+                        <option [ngValue]="entryTypes.Pdf">PDF URL</option>
                       </select>
-                      <div *ngSwitchCase="entryTypes.Formula" class="d-grid gap-1">
-                        <input type="text" class="form-control form-control-sm" [(ngModel)]="value.formulaExpression" [name]="'formulaExpression' + value.testParameterId" placeholder="Formula expression" />
-                        <input type="number" class="form-control form-control-sm" [(ngModel)]="value.numericValue" [name]="'formulaNumeric' + value.testParameterId" placeholder="Numeric result" />
-                        <input type="text" class="form-control form-control-sm" [(ngModel)]="value.formulaResult" [name]="'formulaResult' + value.testParameterId" placeholder="Display result" />
-                      </div>
-                      <input *ngSwitchCase="entryTypes.Image" type="url" class="form-control form-control-sm" [(ngModel)]="value.imageUrl" [name]="'image' + value.testParameterId" placeholder="https://..." />
-                      <input *ngSwitchCase="entryTypes.Pdf" type="url" class="form-control form-control-sm" [(ngModel)]="value.pdfAttachmentUrl" [name]="'pdf' + value.testParameterId" placeholder="https://..." />
-                    </ng-container>
-                  </td>
-                  <td>
-                    <span *ngIf="value.rangeLow != null || value.rangeHigh != null">
-                      {{ value.rangeLow ?? '' }} - {{ value.rangeHigh ?? '' }}
-                      <small class="text-muted">({{ value.rangeMinDays ?? '-' }}–{{ value.rangeMaxDays ?? '-' }} d)</small>
-                    </span>
-                    <span *ngIf="value.rangeLow == null && value.rangeHigh == null">—</span>
-                  </td>
-                  <td>
-                    <span class="text-danger" *ngIf="value.isLow">LOW</span>
-                    <span class="text-danger" *ngIf="value.isHigh">HIGH</span>
-                    <span class="text-danger" *ngIf="value.isOutOfRange && !value.isLow && !value.isHigh">OUT</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    </td>
+                    <td>
+                      <ng-container [ngSwitch]="value.entryType">
+                        <input *ngSwitchCase="entryTypes.Numeric" type="number" class="form-control form-control-sm" [(ngModel)]="value.numericValue" [name]="'numeric' + test.registrationItemId + '_' + value.testParameterId" (ngModelChange)="markDirty()" />
+                        <input *ngSwitchCase="entryTypes.Text" type="text" class="form-control form-control-sm" [(ngModel)]="value.textValue" [name]="'text' + test.registrationItemId + '_' + value.testParameterId" (ngModelChange)="markDirty()" />
+                        <select *ngSwitchCase="entryTypes.PositiveNegative" class="form-select form-select-sm" [(ngModel)]="value.positiveNegativeValue" [name]="'pn' + test.registrationItemId + '_' + value.testParameterId" (ngModelChange)="markDirty()">
+                          <option [ngValue]="null">Select</option>
+                          <option value="Positive">Positive</option>
+                          <option value="Negative">Negative</option>
+                        </select>
+                        <div *ngSwitchCase="entryTypes.Formula" class="d-grid gap-1">
+                          <input type="text" class="form-control form-control-sm" [(ngModel)]="value.formulaExpression" [name]="'formulaExpression' + test.registrationItemId + '_' + value.testParameterId" placeholder="Formula expression" (ngModelChange)="markDirty()" />
+                          <input type="number" class="form-control form-control-sm" [(ngModel)]="value.numericValue" [name]="'formulaNumeric' + test.registrationItemId + '_' + value.testParameterId" placeholder="Numeric result" (ngModelChange)="markDirty()" />
+                          <input type="text" class="form-control form-control-sm" [(ngModel)]="value.formulaResult" [name]="'formulaResult' + test.registrationItemId + '_' + value.testParameterId" placeholder="Display result" (ngModelChange)="markDirty()" />
+                        </div>
+                        <input *ngSwitchCase="entryTypes.Image" type="url" class="form-control form-control-sm" [(ngModel)]="value.imageUrl" [name]="'image' + test.registrationItemId + '_' + value.testParameterId" placeholder="https://..." (ngModelChange)="markDirty()" />
+                        <input *ngSwitchCase="entryTypes.Pdf" type="url" class="form-control form-control-sm" [(ngModel)]="value.pdfAttachmentUrl" [name]="'pdf' + test.registrationItemId + '_' + value.testParameterId" placeholder="https://..." (ngModelChange)="markDirty()" />
+                      </ng-container>
+                    </td>
+                    <td>
+                      <span *ngIf="value.rangeLow != null || value.rangeHigh != null">
+                        {{ value.rangeLow ?? '' }} - {{ value.rangeHigh ?? '' }}
+                        <small class="text-muted">({{ value.rangeMinDays ?? '-' }}–{{ value.rangeMaxDays ?? '-' }} d)</small>
+                      </span>
+                      <span *ngIf="value.rangeLow == null && value.rangeHigh == null">—</span>
+                    </td>
+                    <td>
+                      <span class="text-danger" *ngIf="value.isLow">LOW</span>
+                      <span class="text-danger" *ngIf="value.isHigh">HIGH</span>
+                      <span class="text-danger" *ngIf="value.isOutOfRange && !value.isLow && !value.isHigh">OUT</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <!-- PER-ANIMAL VERIFICATION & AUTHENTICATION -->
-      <div class="row g-3 mb-3" *ngIf="selectedAnimal">
-        <div class="col-lg-6">
-          <div class="card p-3 h-100">
-            <h5>Technician Verification</h5>
+          <!-- Notes, remarks, signature -->
+          <div class="card-body py-2">
             <div class="row g-2">
-              <div class="col-md-8">
-                <label class="form-label">Verified By</label>
-                <input class="form-control" [value]="currentUserDisplay" readonly disabled />
+              <div class="col-md-12">
+                <label class="form-label">Interpretation / Notes</label>
+                <textarea class="form-control" rows="2" [(ngModel)]="test.notes" [name]="'notes' + test.registrationItemId" (ngModelChange)="markDirty()"></textarea>
               </div>
               <div class="col-md-4">
-                <label class="form-label">Remarks</label>
-                <input class="form-control" [(ngModel)]="remarks" name="remarks" />
+                <label class="form-label">Verification Remarks</label>
+                <input class="form-control" [(ngModel)]="test.verificationRemarks" [name]="'remarks' + test.registrationItemId" (ngModelChange)="markDirty()" />
               </div>
-            </div>
-            <div *ngIf="selectedAnimal.isVerified" class="mt-2 small text-success">
-              Verified by {{ selectedAnimal.technicianVerifiedBy }}
-              <span *ngIf="selectedAnimal.technicianVerifiedAt"> on {{ selectedAnimal.technicianVerifiedAt | date:'medium' }}</span>
-            </div>
-            <div class="d-flex gap-2 mt-3">
-              <button
-                *ngIf="!selectedAnimal.isVerified"
-                class="btn btn-outline-primary btn-sm"
-                type="button"
-                (click)="verify(selectedAnimal.registrationAnimalId)"
-                [disabled]="verifying">
-                <span *ngIf="verifying" class="spinner-border spinner-border-sm me-1"></span>
-                Technician Verify
-              </button>
-              <button
-                *ngIf="!selectedAnimal.isVerified"
-                class="btn btn-outline-secondary btn-sm"
-                type="button"
-                (click)="saveAndVerify(selectedAnimal.registrationAnimalId)">
-                Save & Verify
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-6">
-          <div class="card p-3 h-100">
-            <h5>Pathologist Authentication</h5>
-            <div class="row g-2">
-              <div class="col-md-6">
-                <label class="form-label">Authenticated By</label>
-                <input class="form-control" [value]="currentUserDisplay" readonly disabled />
-              </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label class="form-label">Digital Signature</label>
-                <input class="form-control" [(ngModel)]="digitalSignature" name="digitalSignature" />
+                <input class="form-control" [(ngModel)]="test.digitalSignature" [name]="'signature' + test.registrationItemId" (ngModelChange)="markDirty()" />
+              </div>
+              <div class="col-md-4 d-flex align-items-end">
+                <button class="btn btn-primary w-100" type="button" (click)="save(selectedAnimal, test)" [disabled]="saving">
+                  <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
+                  Save {{ test.testName }}
+                </button>
               </div>
             </div>
-            <div *ngIf="selectedAnimal.isAuthenticated" class="mt-2 small text-success">
-              Authenticated by {{ selectedAnimal.pathologistAuthenticatedBy }}
-              <span *ngIf="selectedAnimal.pathologistAuthenticatedAt"> on {{ selectedAnimal.pathologistAuthenticatedAt | date:'medium' }}</span>
+          </div>
+
+          <!-- Verification & Authentication -->
+          <div class="card-body py-2 border-top">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-2"><small class="text-muted">Verified:</small></div>
+              <div class="col-md-4">
+                <span *ngIf="test.isVerified" class="text-success">by {{ test.technicianVerifiedBy }} ({{ test.technicianVerifiedAt | date:'medium' }})</span>
+                <span *ngIf="!test.isVerified" class="text-muted">Not verified</span>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex gap-2">
+                  <button
+                    *ngIf="!test.isVerified"
+                    class="btn btn-outline-primary btn-sm"
+                    type="button"
+                    (click)="verify(selectedAnimal, test)"
+                    [disabled]="verifying">
+                    <span *ngIf="verifying" class="spinner-border spinner-border-sm me-1"></span>
+                    Technician Verify
+                  </button>
+                  <button
+                    *ngIf="!test.isVerified"
+                    class="btn btn-outline-secondary btn-sm"
+                    type="button"
+                    (click)="saveAndVerify(selectedAnimal, test)">
+                    Save & Verify
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              *ngIf="selectedAnimal.isVerified && !selectedAnimal.isAuthenticated"
-              class="btn btn-outline-success btn-sm mt-3"
-              type="button"
-              [disabled]="!canAuthenticate || authenticating"
-              (click)="authenticate(selectedAnimal.registrationAnimalId)">
-              <span *ngIf="authenticating" class="spinner-border spinner-border-sm me-1"></span>
-              Authenticate (Completes Test)
-            </button>
+            <div class="row g-2 align-items-center mt-1">
+              <div class="col-md-2"><small class="text-muted">Authenticated:</small></div>
+              <div class="col-md-4">
+                <span *ngIf="test.isAuthenticated" class="text-success">by {{ test.pathologistAuthenticatedBy }} ({{ test.pathologistAuthenticatedAt | date:'medium' }})</span>
+                <span *ngIf="!test.isAuthenticated" class="text-muted">Not authenticated</span>
+              </div>
+              <div class="col-md-6">
+                <button
+                  *ngIf="test.isVerified && !test.isAuthenticated"
+                  class="btn btn-outline-success btn-sm"
+                  type="button"
+                  [disabled]="!canAuthenticate || authenticating"
+                  (click)="authenticate(selectedAnimal, test)">
+                  <span *ngIf="authenticating" class="spinner-border spinner-border-sm me-1"></span>
+                  Authenticate (Completes Test)
+                </button>
+                <button
+                  *ngIf="test.isAuthenticated && canRerun"
+                  class="btn btn-outline-warning btn-sm ms-2"
+                  type="button"
+                  (click)="openRerun(selectedAnimal, test)">
+                  Re-run
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Report actions (per test) -->
+          <div class="card-body py-2 border-top">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <small class="text-muted me-2">Report:</small>
+              <button class="btn btn-outline-info btn-sm" type="button" (click)="previewReport(test)">Preview</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" (click)="downloadReport(test, 'pdf')">PDF</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" (click)="downloadReport(test, 'png')">PNG</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" (click)="downloadReport(test, 'jpg')">JPG</button>
+              <button class="btn btn-outline-success btn-sm" type="button" (click)="sendReport(test, 'pdf')">WhatsApp PDF</button>
+              <button class="btn btn-outline-success btn-sm" type="button" (click)="sendReport(test, 'jpg')">WhatsApp JPG</button>
+            </div>
           </div>
         </div>
+      </ng-container>
+
+      <div class="alert alert-info" *ngIf="selectedAnimal && !selectedAnimal?.tests?.length">
+        No ordered tests available for {{ selectedAnimal.animalName }}.
       </div>
 
       <!-- REPORT PREVIEW -->
       <div class="card mb-3" *ngIf="showPreview">
         <div class="card-header d-flex justify-content-between align-items-center py-2">
-          <strong>Report Preview</strong>
+          <strong>Report Preview{{ previewTestName ? ' — ' + previewTestName : '' }}</strong>
           <button class="btn btn-sm btn-outline-secondary" (click)="showPreview = false">Close</button>
         </div>
         <div class="card-body p-0">
           <iframe *ngIf="reportPreviewUrl" [src]="reportPreviewUrl"
             style="width:100%;height:600px;border:none;"></iframe>
         </div>
-      </div>
-
-      <!-- WORKFLOW ACTIONS -->
-      <div class="d-flex flex-wrap gap-2 mt-3">
-        <button class="btn btn-primary" type="button" (click)="save(selectedAnimal?.registrationAnimalId)" [disabled]="saving">
-          <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
-          Save {{ selectedAnimal ? selectedAnimal.animalName : '' }}
-        </button>
-        <button class="btn btn-outline-info" type="button" (click)="previewReport()">Report Preview</button>
-        <button class="btn btn-outline-secondary" type="button" (click)="downloadReport('pdf')">Download PDF</button>
-        <button class="btn btn-outline-secondary" type="button" (click)="downloadReport('png')">PNG</button>
-        <button class="btn btn-outline-secondary" type="button" (click)="downloadReport('jpg')">JPG</button>
-        <button class="btn btn-outline-success" type="button" (click)="sendReport('pdf')">WhatsApp PDF</button>
-        <button class="btn btn-outline-success" type="button" (click)="sendReport('jpg')">WhatsApp JPG</button>
-        <button
-          *ngIf="detail.status === 'Completed' && canRerun"
-          class="btn btn-outline-warning ms-auto"
-          type="button"
-          (click)="showRerunModal = true">
-          Re-run / Move to Pending
-        </button>
       </div>
 
       <!-- RE-RUN MODAL -->
@@ -385,8 +406,7 @@ type Detail = {
               <button type="button" class="btn-close" (click)="showRerunModal = false"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-2">Move this result back to the technician workflow for re-testing.</p>
-              <p class="small text-muted mb-3">Previous authentication will be cleared for ALL animals. The test will be re-entered and re-authenticated.</p>
+              <p class="mb-2">Re-run <strong>{{ rerunTarget?.test?.testName }}</strong> for <strong>{{ rerunTarget?.animal?.animalName || 'selected animal' }}</strong>. Its saved values will be kept; verification and authentication will be cleared so it can be re-tested and re-approved.</p>
               <label class="form-label">Reason for Re-run <span class="text-danger">*</span></label>
               <textarea class="form-control" rows="3" [(ngModel)]="rerunReason" name="rerunReason"
                 placeholder="Enter the reason for re-running this test..."></textarea>
@@ -420,6 +440,7 @@ type Detail = {
 export class ResultEntryComponent {
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private auth = inject(AuthService);
   private sanitizer = inject(DomSanitizer);
 
@@ -428,58 +449,82 @@ export class ResultEntryComponent {
   id!: number;
   detail?: Detail;
   testName?: string;
-  verifiedBy = '';
-  authenticatedBy = '';
-  digitalSignature = '';
-  remarks = '';
   errorMessage = '';
   successMessage = '';
   selectedAnimalIndex = 0;
 
   showPreview = false;
   reportPreviewUrl: SafeResourceUrl | null = null;
+  previewTestName = '';
 
   showRerunModal = false;
+  rerunTarget: RerunTarget | null = null;
   rerunReason = '';
 
   saving = false;
   savingAll = false;
   verifying = false;
-  verifyingAll = false;
   authenticating = false;
-  authenticatingAll = false;
 
-  get currentUserDisplay(): string {
-    return this.auth.getUsername() ?? '';
-  }
-
-  get selectedAnimal(): AnimalResult | undefined {
-    return this.detail?.animalResults?.[this.selectedAnimalIndex];
-  }
-
-  get selectedAnimalNotes(): string {
-    return this.selectedAnimal?.notes ?? '';
-  }
-
-  set selectedAnimalNotes(value: string) {
-    if (this.selectedAnimal) {
-      this.selectedAnimal.notes = value;
-    }
+  get selectedAnimal(): AnimalEntry | undefined {
+    return this.detail?.animals?.[this.selectedAnimalIndex];
   }
 
   get canAuthenticate(): boolean {
-    if (!this.detail) return false;
-    const roles = this.auth.hasAnyRole(['Admin', 'Manager']);
-    return roles;
+    return this.auth.hasAnyRole(['Admin', 'Manager']);
   }
 
   get canRerun(): boolean {
     return this.auth.hasAnyRole(['Admin', 'Manager']);
   }
 
+  get showSaveAll(): boolean {
+    return !!this.selectedAnimal?.isDirty;
+  }
+
+  get currentTestName(): string {
+    return this.detail?.animals?.[0]?.tests?.[0]?.testName ?? this.testName ?? '';
+  }
+
+  markDirty() {
+    if (this.selectedAnimal) {
+      this.selectedAnimal.isDirty = true;
+    }
+  }
+
   ngOnInit() {
+    this.route.paramMap.subscribe((params) => {
+      const newId = Number(params.get('id'));
+      if (newId !== this.id) {
+        this.id = newId;
+        this.reload();
+      }
+    });
     this.id = Number(this.route.snapshot.paramMap.get('id'));
     this.reload();
+  }
+
+  switchTest(registrationItemId: number) {
+    if (registrationItemId !== this.id) {
+      this.router.navigate(['/results', registrationItemId]);
+    }
+  }
+
+  trackByItem(_index: number, item: TestEntry) {
+    return item.registrationItemId;
+  }
+
+  trackByValue(_index: number, item: ValueRow) {
+    return item.testParameterId;
+  }
+
+  private testStatusClass(status: string): string {
+    switch (status) {
+      case 'Completed': return 'bg-success';
+      case 'InProgress': return 'bg-info text-dark';
+      case 'Pending': return 'bg-warning text-dark';
+      default: return 'bg-secondary';
+    }
   }
 
   selectAnimal(index: number) {
@@ -491,13 +536,12 @@ export class ResultEntryComponent {
       next: (detail) => {
         this.detail = detail;
         this.selectedAnimalIndex = 0;
-        this.digitalSignature = detail.animalResults[0]?.digitalSignature ?? '';
-        this.remarks = detail.animalResults[0]?.verificationRemarks ?? '';
         this.successMessage = '';
         this.errorMessage = '';
-        
-        // Extract test name from first animal's first parameter or use a generic label
-        // We don't have test name in the DTO currently, but we can get it from the worklist or test metadata
+        detail.animals?.forEach(a => a.isDirty = false);
+
+        const current = detail.orderedTests?.find(t => t.isCurrent);
+        this.testName = current?.itemName ?? this.testName ?? '';
       },
       error: (err) => {
         this.errorMessage = err?.error ?? 'Failed to load result details.';
@@ -505,24 +549,19 @@ export class ResultEntryComponent {
     });
   }
 
-  save(animalId?: number) {
-    if (!this.detail) return;
-    const targetAnimalId = animalId ?? this.selectedAnimal?.registrationAnimalId;
-    if (!targetAnimalId) return;
+  save(animal: AnimalEntry, test: TestEntry) {
+    if (!animal || !test) return;
 
     this.errorMessage = '';
     this.successMessage = '';
     this.saving = true;
 
-    const animal = this.detail.animalResults.find(a => a.registrationAnimalId === targetAnimalId);
-    if (!animal) return;
-
     const payload = {
-      registrationItemId: this.detail.registrationItemId,
-      registrationAnimalId: targetAnimalId,
+      registrationItemId: test.registrationItemId,
+      registrationAnimalId: animal.registrationAnimalId,
       ageInDays: animal.ageInDays ?? null,
-      notes: animal.notes ?? null,
-      values: animal.values.map((value) => ({
+      notes: test.notes ?? null,
+      values: test.values.map((value) => ({
         testParameterId: value.testParameterId,
         entryType: value.entryType,
         numericValue: value.numericValue ?? null,
@@ -535,9 +574,9 @@ export class ResultEntryComponent {
       })),
     };
 
-    this.http.post(`/api/results/${this.id}/enter`, payload).subscribe({
+    this.http.post(`/api/results/${test.registrationItemId}/enter`, payload).subscribe({
       next: () => {
-        this.successMessage = `Results saved for ${animal.animalName}.`;
+        this.successMessage = `Results saved for ${animal.animalName} — ${test.testName}.`;
         this.saving = false;
         this.reload();
       },
@@ -549,30 +588,31 @@ export class ResultEntryComponent {
   }
 
   saveAll() {
-    if (!this.detail) return;
-    
+    const animal = this.selectedAnimal;
+    if (!animal || !animal.tests?.length) return;
+
     this.errorMessage = '';
     this.successMessage = '';
     this.savingAll = true;
 
-    const animalsToSave = [...this.detail.animalResults];
+    const testsToSave = [...animal.tests];
     let savedCount = 0;
 
     const saveNext = (index: number) => {
-      if (index >= animalsToSave.length) {
-        this.successMessage = `Results saved for ${savedCount} animal(s).`;
+      if (index >= testsToSave.length) {
+        this.successMessage = `Results saved for ${savedCount} test(s) of ${animal.animalName}.`;
         this.savingAll = false;
         this.reload();
         return;
       }
 
-      const animal = animalsToSave[index];
+      const test = testsToSave[index];
       const payload = {
-        registrationItemId: this.detail!.registrationItemId,
+        registrationItemId: test.registrationItemId,
         registrationAnimalId: animal.registrationAnimalId,
         ageInDays: animal.ageInDays ?? null,
-        notes: animal.notes ?? null,
-        values: animal.values.map((value) => ({
+        notes: test.notes ?? null,
+        values: test.values.map((value) => ({
           testParameterId: value.testParameterId,
           entryType: value.entryType,
           numericValue: value.numericValue ?? null,
@@ -585,13 +625,13 @@ export class ResultEntryComponent {
         })),
       };
 
-      this.http.post(`/api/results/${this.id}/enter`, payload).subscribe({
+      this.http.post(`/api/results/${test.registrationItemId}/enter`, payload).subscribe({
         next: () => {
           savedCount++;
           saveNext(index + 1);
         },
         error: (err) => {
-          this.errorMessage = `Failed to save for ${animal.animalName}: ${err?.error ?? 'Save failed.'}`;
+          this.errorMessage = `Failed to save for ${animal.animalName} — ${test.testName}: ${err?.error ?? 'Save failed.'}`;
           this.savingAll = false;
         },
       });
@@ -600,23 +640,23 @@ export class ResultEntryComponent {
     saveNext(0);
   }
 
-  saveAndVerify(animalId: number) {
-    this.save(animalId);
-    // Note: verify will be called after reload, or we could chain it
+  saveAndVerify(animal: AnimalEntry, test: TestEntry) {
+    this.save(animal, test);
   }
 
-  verify(animalId?: number) {
-    const targetAnimalId = animalId ?? this.selectedAnimal?.registrationAnimalId;
-    if (!targetAnimalId) return;
+  verify(animal: AnimalEntry, test: TestEntry) {
+    if (!animal || !test) return;
 
     this.errorMessage = '';
     this.successMessage = '';
     this.verifying = true;
 
-    this.http.post(`/api/results/${this.id}/verify`, { registrationAnimalId: targetAnimalId, remarks: this.remarks }).subscribe({
+    this.http.post(`/api/results/${test.registrationItemId}/verify`, {
+      registrationAnimalId: animal.registrationAnimalId,
+      remarks: test.verificationRemarks ?? null,
+    }).subscribe({
       next: () => {
-        const animal = this.detail?.animalResults.find(a => a.registrationAnimalId === targetAnimalId);
-        this.successMessage = `Technician verification saved for ${animal?.animalName || 'animal'}.`;
+        this.successMessage = `Technician verification saved for ${animal.animalName} — ${test.testName}.`;
         this.verifying = false;
         this.reload();
       },
@@ -627,44 +667,22 @@ export class ResultEntryComponent {
     });
   }
 
-  verifyAll() {
-    if (!this.detail) return;
-
-    this.errorMessage = '';
-    this.successMessage = '';
-    this.verifyingAll = true;
-
-    this.http.post(`/api/results/${this.id}/verify-all`, {}).subscribe({
-      next: () => {
-        this.successMessage = 'All animals verified by technician.';
-        this.verifyingAll = false;
-        this.reload();
-      },
-      error: (err) => {
-        this.errorMessage = err?.error ?? 'Bulk verification failed.';
-        this.verifyingAll = false;
-      },
-    });
-  }
-
-  authenticate(animalId?: number) {
-    const targetAnimalId = animalId ?? this.selectedAnimal?.registrationAnimalId;
-    if (!targetAnimalId) return;
+  authenticate(animal: AnimalEntry, test: TestEntry) {
+    if (!animal || !test) return;
 
     this.errorMessage = '';
     this.successMessage = '';
     this.authenticating = true;
 
     this.http
-      .post(`/api/results/${this.id}/authenticate`, {
-        registrationAnimalId: targetAnimalId,
-        digitalSignature: this.digitalSignature,
-        remarks: this.remarks,
+      .post(`/api/results/${test.registrationItemId}/authenticate`, {
+        registrationAnimalId: animal.registrationAnimalId,
+        digitalSignature: test.digitalSignature ?? null,
+        remarks: test.verificationRemarks ?? null,
       })
       .subscribe({
         next: () => {
-          const animal = this.detail?.animalResults.find(a => a.registrationAnimalId === targetAnimalId);
-          this.successMessage = `Pathologist authentication saved for ${animal?.animalName || 'animal'}. Test completed.`;
+          this.successMessage = `Pathologist authentication saved for ${animal.animalName} — ${test.testName}. Test completed.`;
           this.authenticating = false;
           this.reload();
         },
@@ -675,61 +693,27 @@ export class ResultEntryComponent {
       });
   }
 
-  authenticateAll() {
-    if (!this.detail) return;
-
-    this.errorMessage = '';
-    this.successMessage = '';
-    this.authenticatingAll = true;
-
-    const animalsToAuth = this.detail.animalResults.filter(a => a.isVerified && !a.isAuthenticated);
-    
-    if (animalsToAuth.length === 0) {
-      this.successMessage = 'All verified animals are already authenticated.';
-      this.authenticatingAll = false;
-      return;
-    }
-
-    let authedCount = 0;
-
-    const authNext = (index: number) => {
-      if (index >= animalsToAuth.length) {
-        this.successMessage = `${authedCount} animal(s) authenticated. Test ${authedCount === this.detail?.animalResults.length ? 'completed' : 'partially authenticated'}.`;
-        this.authenticatingAll = false;
-        this.reload();
-        return;
-      }
-
-      const animal = animalsToAuth[index];
-
-      this.http
-        .post(`/api/results/${this.id}/authenticate`, {
-          registrationAnimalId: animal.registrationAnimalId,
-          digitalSignature: this.digitalSignature,
-          remarks: this.remarks,
-        })
-        .subscribe({
-          next: () => {
-            authedCount++;
-            authNext(index + 1);
-          },
-          error: (err) => {
-            this.errorMessage = `Failed to authenticate ${animal.animalName}: ${err?.error ?? 'Authentication failed.'}`;
-            this.authenticatingAll = false;
-          },
-        });
-    };
-
-    authNext(0);
+  openRerun(animal: AnimalEntry, test: TestEntry) {
+    this.rerunTarget = { animal, test };
+    this.rerunReason = '';
+    this.showRerunModal = true;
   }
 
   rerun() {
+    if (!this.rerunTarget) return;
+    const { animal, test } = this.rerunTarget;
+
     this.errorMessage = '';
     this.successMessage = '';
-    this.http.post(`/api/results/${this.id}/rerun`, { reason: this.rerunReason }).subscribe({
+
+    this.http.post(`/api/results/${test.registrationItemId}/rerun`, {
+      reason: this.rerunReason,
+      registrationAnimalId: animal.registrationAnimalId,
+    }).subscribe({
       next: () => {
-        this.successMessage = 'Result moved back to pending for re-run.';
+        this.successMessage = `${test.testName} for ${animal.animalName} moved back for re-run.`;
         this.showRerunModal = false;
+        this.rerunTarget = null;
         this.rerunReason = '';
         this.reload();
       },
@@ -739,18 +723,19 @@ export class ResultEntryComponent {
     });
   }
 
-  previewReport() {
+  previewReport(test: TestEntry) {
     this.showPreview = true;
-    const url = `/api/results/${this.id}/report?format=pdf`;
+    this.previewTestName = test.testName;
+    const url = `/api/results/${test.registrationItemId}/report?format=pdf`;
     this.reportPreviewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
   }
 
-  downloadReport(format: 'pdf' | 'png' | 'jpg') {
+  downloadReport(test: TestEntry, format: 'pdf' | 'png' | 'jpg') {
     this.errorMessage = '';
     this.successMessage = '';
 
     this.http
-      .get(`/api/results/${this.id}/report?format=${format}`, {
+      .get(`/api/results/${test.registrationItemId}/report?format=${format}`, {
         observe: 'response',
         responseType: 'blob',
       })
@@ -762,11 +747,11 @@ export class ResultEntryComponent {
       });
   }
 
-  sendReport(format: 'pdf' | 'jpg') {
+  sendReport(test: TestEntry, format: 'pdf' | 'jpg') {
     this.errorMessage = '';
     this.successMessage = '';
 
-    this.http.post<{ message: string }>(`/api/whatsapp/send/report/${this.id}`, { format }).subscribe({
+    this.http.post<{ message: string }>(`/api/whatsapp/send/report/${test.registrationItemId}`, { format }).subscribe({
       next: () => {
         this.successMessage = `WhatsApp ${format.toUpperCase()} report queued successfully.`;
       },

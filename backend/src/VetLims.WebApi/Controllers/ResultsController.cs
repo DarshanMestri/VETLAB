@@ -247,16 +247,13 @@ public class ResultsController : ControllerBase
         return Ok(list);
     }
 
-    /// Load details to enter results (per-animal results)
+    /// Load details to enter results — all ordered tests grouped by animal
     [HttpGet("{registrationItemId:int}")]
-    public async Task<ActionResult<ResultDetailDto>> Get(int registrationItemId)
+    public async Task<ActionResult<ResultEntryGroupDto>> Get(int registrationItemId)
     {
         var organizationId = _currentUserService.OrganizationId;
         if (!organizationId.HasValue)
             return Forbid();
-
-        // Ensure per-animal result rows exist
-        await EnsureAnimalResultsAsync(registrationItemId, organizationId.Value);
 
         var item = await _db.RegistrationItems
             .Include(ri => ri.Registration)
@@ -267,93 +264,198 @@ public class ResultsController : ControllerBase
             .FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
 
-        // Load all results for this item (one per animal)
+        // Collect all ordered Test items for this registration (non-cancelled)
+        var testItems = await _db.RegistrationItems
+            .AsNoTracking()
+            .Where(ri => ri.RegistrationId == item.RegistrationId
+                         && ri.ItemType == RegItemType.Test
+                         && ri.Status != RegItemStatus.Canceled)
+            .OrderBy(ri => ri.Id)
+            .ToListAsync();
+
+        // Ensure per-animal result rows exist for each test item
+        foreach (var ti in testItems)
+            await EnsureAnimalResultsAsync(ti.Id, organizationId.Value);
+
+        // Resolve test metadata
+        var testIds = testItems.Select(t => t.ItemId).ToList();
+        var tests = testIds.Count > 0
+            ? await _db.Tests.AsNoTracking().Where(t => testIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id)
+            : new Dictionary<int, Test>();
+
+        // Cache parameters per test
+        var parametersByTest = new Dictionary<int, List<TestParameter>>();
+        foreach (var ti in testItems)
+        {
+            if (!parametersByTest.ContainsKey(ti.ItemId))
+            {
+                var pars = await _db.TestParameters
+                    .Include(p => p.Unit)
+                    .Where(p => p.TestId == ti.ItemId)
+                    .OrderBy(p => p.SortOrder)
+                    .ToListAsync();
+                parametersByTest[ti.ItemId] = pars;
+            }
+        }
+
+        // Load all results and values for the registration's test items
+        var testItemIds = testItems.Select(t => t.Id).ToList();
         var results = await _db.Results
             .Include(r => r.Values)
-            .Where(r => r.RegistrationItemId == registrationItemId)
+            .Where(r => testItemIds.Contains(r.RegistrationItemId))
             .ToListAsync();
 
-        // Build parameter list from Test
-        var parameters = await _db.TestParameters
-            .Include(p => p.Unit)
-            .Where(p => p.TestId == item.ItemId)
-            .OrderBy(p => p.SortOrder)
-            .ToListAsync();
+        // Group tests under each animal
+        var animals = item.Registration.Animals.OrderBy(a => a.Id).ToList();
+        var animalGroup = new List<AnimalEntryGroupDto>();
 
-        // Build animal results
-        var animalResults = new List<AnimalResultDto>();
-
-        foreach (var animal in item.Registration.Animals.OrderBy(a => a.Id))
+        foreach (var animal in animals)
         {
-            var result = results.FirstOrDefault(r => r.RegistrationAnimalId == animal.Id);
-            
-            var values = new List<ResultValueDto>();
-            var ageDays = animal.AgeInDays;
-            var speciesId = item.SpeciesId;
+            var testsForAnimal = new List<TestEntryGroupDto>();
 
-            foreach (var p in parameters)
+            foreach (var ti in testItems)
             {
-                var existing = result?.Values.FirstOrDefault(v => v.TestParameterId == p.Id);
+                tests.TryGetValue(ti.ItemId, out var testObj);
+                var result = results.FirstOrDefault(r => r.RegistrationItemId == ti.Id && r.RegistrationAnimalId == animal.Id);
 
-                var (minD, maxD, low, high) = await _rr.PickRangeAsync(p.Id, speciesId, ageDays);
-                decimal? num = existing?.NumericValue;
-                var flags = _rr.Evaluate(num, low, high);
+                var parameters = parametersByTest.TryGetValue(ti.ItemId, out var pars) ? pars : new List<TestParameter>();
+                var values = new List<ResultValueDto>();
+                var speciesId = item.SpeciesId ?? animal.SpeciesId;
+                var ageDays = animal.AgeInDays;
 
-                values.Add(new ResultValueDto(
-                    p.Id,
-                    p.Name,
-                    p.Unit?.Symbol,
-                    existing?.EntryType ?? ResultEntryType.Numeric,
-                    existing?.NumericValue,
-                    existing?.TextValue,
-                    existing?.PositiveNegativeValue,
-                    existing?.FormulaExpression,
-                    existing?.FormulaResult,
-                    existing?.ImageUrl,
-                    existing?.PdfAttachmentUrl,
-                    minD, maxD, low, high,
-                    flags.isLow, flags.isHigh, flags.outOf
+                foreach (var p in parameters)
+                {
+                    var existing = result?.Values.FirstOrDefault(v => v.TestParameterId == p.Id);
+
+                    var (minD, maxD, low, high) = await _rr.PickRangeAsync(p.Id, speciesId, ageDays);
+                    decimal? num = existing?.NumericValue;
+                    var flags = _rr.Evaluate(num, low, high);
+
+                    values.Add(new ResultValueDto(
+                        p.Id,
+                        p.Name,
+                        p.Unit?.Symbol,
+                        existing?.EntryType ?? ResultEntryType.Numeric,
+                        existing?.NumericValue,
+                        existing?.TextValue,
+                        existing?.PositiveNegativeValue,
+                        existing?.FormulaExpression,
+                        existing?.FormulaResult,
+                        existing?.ImageUrl,
+                        existing?.PdfAttachmentUrl,
+                        minD, maxD, low, high,
+                        flags.isLow, flags.isHigh, flags.outOf
+                    ));
+                }
+
+                testsForAnimal.Add(new TestEntryGroupDto(
+                    ti.Id,
+                    testObj?.Id,
+                    testObj?.Name ?? ti.ItemId.ToString(),
+                    testObj?.Code,
+                    ti.ItemBarcode,
+                    ti.Status.ToString(),
+                    result?.TechnicianVerifiedAt != null,
+                    result?.PathologistAuthenticatedAt != null,
+                    result?.TechnicianVerifiedBy,
+                    result?.TechnicianVerifiedAt,
+                    result?.PathologistAuthenticatedBy,
+                    result?.PathologistAuthenticatedAt,
+                    result?.DigitalSignature,
+                    result?.VerificationRemarks,
+                    result?.Notes,
+                    values
                 ));
             }
 
-            animalResults.Add(new AnimalResultDto(
+            animalGroup.Add(new AnimalEntryGroupDto(
                 animal.Id,
                 animal.AnimalId ?? 0,
                 animal.AnimalName,
                 animal.Species?.Name,
                 animal.AgeInDays,
-                values,
-                result?.TechnicianVerifiedAt != null,
-                result?.PathologistAuthenticatedAt != null,
-                result?.TechnicianVerifiedBy,
-                result?.TechnicianVerifiedAt,
-                result?.PathologistAuthenticatedBy,
-                result?.PathologistAuthenticatedAt,
-                result?.DigitalSignature,
-                result?.VerificationRemarks,
-                result?.Notes
+                testsForAnimal
             ));
         }
 
         var owner = item.Registration.Owner;
+        var orderedTests = await BuildOrderedTestsAsync(item.RegistrationId, registrationItemId);
 
-        return Ok(new ResultDetailDto(
-            item.Id,
-            item.ItemBarcode,
-            animalResults.FirstOrDefault()?.Notes,
-            item.SampleStatus.ToString(),
-            item.Status.ToString(),
-            animalResults,
+        return Ok(new ResultEntryGroupDto(
+            item.RegistrationId,
+            item.Registration.Barcode,
             item.Registration.OwnerName,
             item.Registration.OwnerNameAr,
             item.Registration.OwnerMobile,
             owner?.Email,
             owner?.Code,
-            item.Registration.OwnerId,
-            item.Registration.ClientId,
-            item.RerunReason,
-            item.RerunInitiatedBy,
-            item.RerunAt));
+            animalGroup,
+            orderedTests
+        ));
+    }
+
+    private async Task<IEnumerable<ResultOrderedItemDto>> BuildOrderedTestsAsync(int registrationId, int currentItemId)
+    {
+        var siblings = await _db.RegistrationItems
+            .AsNoTracking()
+            .Where(ri => ri.RegistrationId == registrationId && ri.Status != RegItemStatus.Canceled)
+            .OrderBy(ri => ri.ItemType).ThenBy(ri => ri.Id)
+            .ToListAsync();
+
+        if (siblings.Count == 0)
+            return new List<ResultOrderedItemDto>();
+
+        var testIds = siblings.Where(s => s.ItemType == RegItemType.Test).Select(s => s.ItemId).ToList();
+        var profileIds = siblings.Where(s => s.ItemType == RegItemType.Profile).Select(s => s.ItemId).ToList();
+        var packageIds = siblings.Where(s => s.ItemType == RegItemType.Package).Select(s => s.ItemId).ToList();
+
+        var testNames = testIds.Count > 0
+            ? await _db.Tests.AsNoTracking().Where(t => testIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Name)
+            : new Dictionary<int, string>();
+        var profileNames = profileIds.Count > 0
+            ? await _db.Profiles.AsNoTracking().Where(p => profileIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name)
+            : new Dictionary<int, string>();
+        var packageNames = packageIds.Count > 0
+            ? await _db.Packages.AsNoTracking().Where(p => packageIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name)
+            : new Dictionary<int, string>();
+
+        var testCodes = testIds.Count > 0
+            ? await _db.Tests.AsNoTracking().Where(t => testIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Code)
+            : new Dictionary<int, string?>();
+
+        var result = new List<ResultOrderedItemDto>();
+        foreach (var s in siblings)
+        {
+            string name = s.ItemId.ToString();
+            string? code = null;
+            int? testId = null;
+
+            if (s.ItemType == RegItemType.Test)
+            {
+                testId = s.ItemId;
+                if (testNames.TryGetValue(s.ItemId, out var n)) name = n;
+                testCodes.TryGetValue(s.ItemId, out code);
+            }
+            else if (s.ItemType == RegItemType.Profile)
+            {
+                if (profileNames.TryGetValue(s.ItemId, out var n)) name = n;
+            }
+            else if (s.ItemType == RegItemType.Package)
+            {
+                if (packageNames.TryGetValue(s.ItemId, out var n)) name = n;
+            }
+
+            result.Add(new ResultOrderedItemDto(
+                s.Id,
+                (int)s.ItemType,
+                testId,
+                name,
+                code,
+                s.Status.ToString(),
+                s.Id == currentItemId));
+        }
+
+        return result;
     }
 
     /// Save (upsert) values for a specific animal, auto-flag using reference ranges
@@ -583,7 +685,8 @@ public class ResultsController : ControllerBase
         return File(report.Content, report.ContentType, report.FileName);
     }
 
-    /// Re-run: move a completed/authenticated result back to InProgress for the technician
+    /// Re-run: move a completed/authenticated result back to InProgress for the technician.
+    /// Re-run a single animal: keep its values, clear verification/authentication so it can be re-tested and re-approved.
     [HttpPost("{registrationItemId:int}/rerun")]
     public async Task<ActionResult> Rerun(int registrationItemId, [FromBody] ResultRerunDto dto)
     {
@@ -591,37 +694,41 @@ public class ResultsController : ControllerBase
         if (!roles.Any(r => r == "Admin" || r == "Manager"))
             return Forbid("Only Admin or Manager users may initiate a re-run.");
 
+        if (dto.RegistrationAnimalId <= 0)
+            return BadRequest("RegistrationAnimalId is required for per-animal re-run.");
+
         var item = await _db.RegistrationItems.FirstOrDefaultAsync(ri => ri.Id == registrationItemId);
         if (item is null) return NotFound();
 
-        if (item.Status != RegItemStatus.Completed)
-            return BadRequest("Only completed results can be moved back to pending for re-run.");
-
+        // Preserve re-run audit trail (item level)
         var userName = _currentUserService.UserName ?? "system";
-
-        // Reset status back to InProgress for the technician workflow
-        item.Status = RegItemStatus.InProgress;
-
-        // Preserve re-run audit trail
         item.RerunReason = dto.Reason?.Trim();
         item.RerunInitiatedBy = userName;
         item.RerunAt = DateTime.UtcNow;
 
-        // Clear authentication/verification for ALL animals so they must be re-done
-        var results = await _db.Results
-            .Where(r => r.RegistrationItemId == registrationItemId)
+        // Per-animal re-run: keep values, clear verification/authentication for that animal only
+        var result = await _db.Results
+            .Include(r => r.Values)
+            .FirstOrDefaultAsync(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId == dto.RegistrationAnimalId);
+
+        if (result is null)
+            return NotFound($"Result for animal {dto.RegistrationAnimalId} not found.");
+
+        result.TechnicianVerifiedBy = null;
+        result.TechnicianVerifiedById = null;
+        result.TechnicianVerifiedAt = null;
+        result.PathologistAuthenticatedBy = null;
+        result.PathologistAuthenticatedById = null;
+        result.PathologistAuthenticatedAt = null;
+        result.CompletedAt = null;
+
+        // Recompute item status: if any animal is now unauthenticated, revert to InProgress
+        var allAnimalResults = await _db.Results
+            .Where(r => r.RegistrationItemId == registrationItemId && r.RegistrationAnimalId != null)
             .ToListAsync();
 
-        foreach (var result in results)
-        {
-            result.TechnicianVerifiedBy = null;
-            result.TechnicianVerifiedById = null;
-            result.TechnicianVerifiedAt = null;
-            result.PathologistAuthenticatedBy = null;
-            result.PathologistAuthenticatedById = null;
-            result.PathologistAuthenticatedAt = null;
-            result.CompletedAt = null;
-        }
+        var allAuthenticated = allAnimalResults.Any() && allAnimalResults.All(r => r.PathologistAuthenticatedAt != null);
+        item.Status = allAuthenticated ? RegItemStatus.Completed : RegItemStatus.InProgress;
 
         await _db.SaveChangesAsync();
         return NoContent();
