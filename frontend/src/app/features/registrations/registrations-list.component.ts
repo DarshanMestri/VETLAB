@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -41,11 +41,11 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
             </div>
             <div class="col-md-2">
               <label class="form-label small fw-semibold">Date From</label>
-              <input class="form-control form-control-sm" type="date" [(ngModel)]="dateFrom" name="dateFrom" />
+              <input class="form-control form-control-sm" type="date" [(ngModel)]="dateFrom" name="dateFrom" (change)="loadData()" />
             </div>
             <div class="col-md-2">
               <label class="form-label small fw-semibold">Date To</label>
-              <input class="form-control form-control-sm" type="date" [(ngModel)]="dateTo" name="dateTo" />
+              <input class="form-control form-control-sm" type="date" [(ngModel)]="dateTo" name="dateTo" (change)="loadData()" />
             </div>
             <div class="col-md-2">
               <label class="form-label small fw-semibold">Status</label>
@@ -81,7 +81,7 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let r of rows"
+          <tr *ngFor="let r of rows; trackBy: trackById"
               [class.table-danger]="r.paymentStatus === 'Unpaid'"
               [class.table-success]="r.paymentStatus === 'Paid'"
               [class.table-secondary]="r.paymentStatus === 'Partially Paid'">
@@ -161,10 +161,12 @@ type Paged<T> = { items: T[]; total: number; page: number; pageSize: number };
 export class RegistrationsListComponent {
   Math = Math;
   private http = inject(HttpClient);
+  private cdr = inject(ChangeDetectorRef);
   rows: Row[] = [];
   total = 0;
   page = 1;
   pageSize = 20;
+  private currentRequest = 0;
 
   search = '';
   dateFrom = '';
@@ -179,21 +181,30 @@ export class RegistrationsListComponent {
     return Math.ceil(this.total / this.pageSize);
   }
 
+  trackById(_index: number, row: Row): number {
+    return row.id;
+  }
+
   ngOnInit() {
     this.loadData();
   }
 
   loadData() {
+    const requestId = ++this.currentRequest;
+    this.rows = [];
+
     const params: any = { page: this.page, pageSize: this.pageSize, status: this.statusFilter };
     if (this.search?.trim()) params.search = this.search.trim();
-    if (this.dateFrom) params.dateFrom = this.dateFrom;
-    if (this.dateTo) params.dateTo = this.dateTo;
+    if (this.dateFrom) params.dateFrom = new Date(this.dateFrom + 'T00:00:00').toISOString();
+    if (this.dateTo) params.dateTo = new Date(this.dateTo + 'T23:59:59.999').toISOString();
 
     this.http
       .get<Paged<Row>>('/api/registrations', { params })
       .subscribe((res) => {
+        if (requestId !== this.currentRequest) return;
         this.rows = res.items ?? [];
         this.total = res.total;
+        this.cdr.detectChanges();
       });
   }
 

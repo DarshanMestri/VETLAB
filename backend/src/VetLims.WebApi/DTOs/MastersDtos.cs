@@ -219,7 +219,7 @@ public record RegistrationDto(
 
 public record RegistrationAnimalDto(int SpeciesId, string? AnimalName, int? AnimalId = null, int? AgeInDays = null);
 
-public record RegistrationItemCreateDto(RegItemType ItemType, int ItemId, int? SpeciesId, int? SampleTypeId = null);
+public record RegistrationItemCreateDto(RegItemType ItemType, int ItemId, int? SpeciesId, int? SampleTypeId = null, int? RegistrationItemId = null, bool IsNew = false);
 
 public record RegistrationDetailDto(
     int Id,

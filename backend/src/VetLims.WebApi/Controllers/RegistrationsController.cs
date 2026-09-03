@@ -60,8 +60,10 @@ public class RegistrationsController : ControllerBase
         {
             query = query.Where(reg => reg.Animals.Any(a => a.SpeciesId == q.SpeciesId.Value));
         }
+        // DateFrom/DateTo arrive as explicit UTC instants (start / end of the
+        // local day the user selected); compare directly against stored UTC.
         if (q.DateFrom.HasValue) query = query.Where(x => x.CreatedDate >= q.DateFrom.Value);
-        if (q.DateTo.HasValue) query = query.Where(x => x.CreatedDate <= q.DateTo.Value.AddDays(1).AddTicks(-1));
+        if (q.DateTo.HasValue) query = query.Where(x => x.CreatedDate <= q.DateTo.Value);
 
         var total = await query.CountAsync();
         var items = await query.OrderByDescending(x => x.Id)
@@ -421,6 +423,10 @@ public class RegistrationsController : ControllerBase
             };
         }
 
+        // Snapshot existing items so pre-existing tests keep their original,
+        // stored price (only newly ordered tests take the latest rate).
+        var existingItems = reg.Items.ToDictionary(i => i.Id);
+
         // Clear existing animals and items
         reg.Animals.Clear();
         reg.Items.Clear();
@@ -453,8 +459,12 @@ public class RegistrationsController : ControllerBase
             });
         }
 
-        // Re-add items with pricing
-        decimal totalNet = 0, totalVat = 0;
+        // Re-add items with pricing. Pre-existing items (matched by their stored
+        // RegistrationItemId) keep their original stored Price/VatRate/VatAmount;
+        // newly ordered items are priced at the latest rate.
+        decimal baseNet = 0, baseVat = 0;
+        var newLines = new List<OrderLinePricing>();
+
         foreach (var it in dto.Items)
         {
             if (it.SampleTypeId.HasValue)
@@ -474,8 +484,23 @@ public class RegistrationsController : ControllerBase
                 ? reg.Animals.Count(a => a.SpeciesId == it.SpeciesId.Value)
                 : reg.Animals.Count;
 
-            var (price, vatRate) = await _pricing.ResolvePricingAsync(dto.ClientId, it.ItemType, it.ItemId);
-            var unitVat = price > 0 ? decimal.Round(price * vatRate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
+            RegistrationItem? existing = null;
+            var keptExisting = it.RegistrationItemId.HasValue
+                && existingItems.TryGetValue(it.RegistrationItemId.Value, out existing);
+            decimal price, vatRate;
+            var unitVat = keptExisting
+                ? (existing!.Quantity > 0 ? existing.VatAmount / existing.Quantity : 0m)
+                : 0m;
+            if (keptExisting)
+            {
+                price = existing!.Price;
+                vatRate = existing.VatRate;
+            }
+            else
+            {
+                (price, vatRate) = await _pricing.ResolvePricingAsync(dto.ClientId, it.ItemType, it.ItemId);
+                unitVat = price > 0 ? decimal.Round(price * vatRate / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
+            }
             var item = new RegistrationItem
             {
                 LaboratoryId = branch.LaboratoryId,
@@ -487,37 +512,38 @@ public class RegistrationsController : ControllerBase
                 Price = price,
                 Quantity = quantity,
                 VatRate = vatRate,
+                // Preserve the item's per-unit net/VAT; only the quantity scales
+                // with animals added/removed during this edit.
                 VatAmount = unitVat * quantity,
                 ItemBarcode = await _barcodes.NextAsync("IT")
             };
             reg.Items.Add(item);
-            totalNet += price * quantity;
-            totalVat += unitVat * quantity;
+
+            if (keptExisting)
+            {
+                // Existing tests keep their original stored values (per unit),
+                // scaled only by the new quantity.
+                baseNet += price * quantity;
+                baseVat += unitVat * quantity;
+            }
+            else
+            {
+                newLines.Add(new OrderLinePricing(price, vatRate, unitVat, quantity));
+            }
         }
 
-        // Discount calculation
-        decimal subtotalPlusVat = totalNet + totalVat;
-        decimal discountAmount = 0m;
-        if (dto.DiscountType.HasValue && dto.DiscountValue > 0)
-        {
-            if (dto.DiscountType == DiscountType.Percentage)
-            {
-                if (dto.DiscountValue > 100) return BadRequest("Discount percentage cannot exceed 100%.");
-                discountAmount = decimal.Round(subtotalPlusVat * dto.DiscountValue / 100m, 2, MidpointRounding.AwayFromZero);
-            }
-            else if (dto.DiscountType == DiscountType.Amount)
-            {
-                if (dto.DiscountValue > subtotalPlusVat) return BadRequest("Discount amount cannot exceed the subtotal.");
-                discountAmount = decimal.Round(dto.DiscountValue, 2, MidpointRounding.AwayFromZero);
-            }
-            if (discountAmount < 0) return BadRequest("Discount cannot be negative.");
-        }
+        // Totals: existing items at their stored values + new items at the latest rate.
+        var totals = OrderTotalsCalculator.Compute(baseNet, baseVat, newLines, dto.DiscountType, dto.DiscountValue);
+        if (dto.DiscountType == DiscountType.Percentage && dto.DiscountValue > 100)
+            return BadRequest("Discount percentage cannot exceed 100%.");
+        if (dto.DiscountType == DiscountType.Amount && dto.DiscountValue > (baseNet + baseVat + newLines.Sum(l => l.UnitPrice * l.Quantity) + newLines.Sum(l => l.VatAmount * l.Quantity)))
+            return BadRequest("Discount amount cannot exceed the subtotal.");
 
         reg.DiscountType = dto.DiscountType;
         reg.DiscountValue = decimal.Round(dto.DiscountValue, 2, MidpointRounding.AwayFromZero);
-        reg.DiscountAmount = discountAmount;
-        reg.TotalAmount = decimal.Round(subtotalPlusVat - discountAmount, 2, MidpointRounding.AwayFromZero);
-        reg.TotalVat = decimal.Round(totalVat, 2, MidpointRounding.AwayFromZero);
+        reg.DiscountAmount = totals.DiscountAmount;
+        reg.TotalAmount = totals.TotalAmount;
+        reg.TotalVat = totals.TotalVat;
 
         await _db.SaveChangesAsync();
         return Ok(await ProjectDetail(reg.Id));

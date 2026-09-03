@@ -86,6 +86,10 @@ type CreateDto = {
     itemId?: number | null;
     speciesId?: number | null;
     sampleTypeId?: number | null;
+    registrationItemId?: number | null;
+    isNew?: boolean;
+    price?: number;
+    vatAmount?: number;
   }[];
   initialPaymentAmount?: number | null;
   initialPaymentMethod?: PaymentMethodType | null;
@@ -770,6 +774,11 @@ export class RegistrationFormComponent implements AfterViewInit {
   existingPayments: { id: number; method: string; amount: number; paidAt: string; reference?: string; currency: string }[] = [];
   paymentStatus = 'Unpaid';
 
+  // Stored amounts from the loaded registration (edit mode) — preserved on save.
+  storedTotalAmount = 0;
+  storedPaidAmount = 0;
+  storedBalance = 0;
+
   @ViewChildren('barcodeSvg') barcodeSvgs!: QueryList<ElementRef<SVGSVGElement>>;
   @ViewChildren('printBarcodeSvg') printBarcodeSvgs!: QueryList<ElementRef<SVGSVGElement>>;
 
@@ -799,7 +808,7 @@ export class RegistrationFormComponent implements AfterViewInit {
   cachedNetTotal = 0;
   cachedBalanceDue = 0;
   cachedUniqueSpecies: { id: number; name: string }[] = [];
-  cachedItemsBySpecies = new Map<number | null, { itemType: RegItemType; itemId?: number | null; speciesId?: number | null; sampleTypeId?: number | null }[]>();
+  cachedItemsBySpecies = new Map<number | null, { itemType: RegItemType; itemId?: number | null; speciesId?: number | null; sampleTypeId?: number | null; registrationItemId?: number | null; isNew?: boolean; price?: number; vatAmount?: number }[]>();
   cachedAnimalCountBySpecies = new Map<number, number>();
   cachedTotalAnimals = 0;
   cachedOrderableMap = new Map<string, string>();
@@ -865,7 +874,7 @@ export class RegistrationFormComponent implements AfterViewInit {
   }
 
   get paidAmount() {
-    return this.model.initialPaymentAmount ?? 0;
+    return this.editMode ? this.storedPaidAmount : (this.model.initialPaymentAmount ?? 0);
   }
 
   // --- Cache Rebuild Methods ---
@@ -928,10 +937,18 @@ export class RegistrationFormComponent implements AfterViewInit {
     for (const item of this.model.items) {
       if (!item.itemId) continue;
       const qty = this.cachedAnimalCountBySpecies.get(item.speciesId ?? 0) ?? this.cachedTotalAnimals;
-      const rate = this.priceInfo(item.itemType, item.itemId ?? null);
-      subtotal += rate.rate * qty;
-      if (rate.rate > 0) {
-        vatTotal += Math.round(rate.rate * rate.vatRate) / 100 * qty;
+
+      if (this.editMode && !item.isNew && item.registrationItemId) {
+        // Pre-existing tests keep their original stored price / VAT. Only the
+        // quantity reflects animals added or removed during this edit.
+        subtotal += (item.price ?? 0) * qty;
+        vatTotal += (item.vatAmount ?? 0) * qty;
+      } else {
+        const rate = this.priceInfo(item.itemType, item.itemId ?? null);
+        subtotal += rate.rate * qty;
+        if (rate.rate > 0) {
+          vatTotal += Math.round(rate.rate * rate.vatRate) / 100 * qty;
+        }
       }
     }
     this.cachedSubtotal = subtotal;
@@ -1001,49 +1018,67 @@ export class RegistrationFormComponent implements AfterViewInit {
   private loadRegistrationForEdit() {
     this.http.get<any>(`/api/registrations/${this.editId}`).subscribe({
       next: (reg) => {
-        this.model.ownerName = reg.ownerName ?? '';
-        this.model.ownerNameAr = reg.ownerNameAr ?? '';
-        this.model.ownerMobile = reg.ownerMobile ?? '';
-        this.model.clientId = reg.clientId ?? null;
-        this.model.ownerId = reg.ownerId ?? null;
-        this.model.doctorId = reg.doctorId ?? null;
-        this.model.referenceNumber = reg.referenceNumber ?? '';
-        this.model.clinicalNotes = reg.clinicalNotes ?? '';
-        this.model.ageValue = reg.ageValue ?? null;
-        this.ageValue = reg.ageValue ?? null;
-        this.ageUnit = reg.ageUnit ?? AgeUnit.Years;
-        this.discountType = reg.discountType ?? null;
-        this.discountValue = reg.discountValue ?? null;
+        this.ngZone.run(() => {
+          this.model.ownerName = reg.ownerName ?? '';
+          this.model.ownerNameAr = reg.ownerNameAr ?? '';
+          this.model.ownerMobile = reg.ownerMobile ?? '';
+          this.model.clientId = reg.clientId ?? null;
+          this.model.ownerId = reg.ownerId ?? null;
+          this.model.doctorId = reg.doctorId ?? null;
+          this.model.referenceNumber = reg.referenceNumber ?? '';
+          this.model.clinicalNotes = reg.clinicalNotes ?? '';
+          this.model.ageValue = reg.ageValue ?? null;
+          this.ageValue = reg.ageValue ?? null;
+          this.ageUnit = reg.ageUnit ?? AgeUnit.Years;
+          this.discountType = reg.discountType ?? null;
+          this.discountValue = reg.discountValue ?? null;
 
-        // Load payment history
-        this.existingPayments = (reg.payments ?? []).map((p: any) => ({
-          id: p.id,
-          method: p.method,
-          amount: p.amount,
-          paidAt: p.paidAt,
-          reference: p.reference,
-          currency: p.currency,
-        }));
-        this.paymentStatus = reg.paymentStatus ?? 'Unpaid';
+          // Stored amounts are preserved for edit; only newly added items
+          // contribute fresh pricing on top.
+          this.storedTotalAmount = reg.totalAmount ?? 0;
+          this.storedPaidAmount = reg.paidAmount ?? 0;
+          this.storedBalance = reg.balance ?? 0;
 
-        if (reg.animals?.length) {
-          this.model.animals = reg.animals.map((a: any) => ({
-            speciesId: a.speciesId,
-            animalName: a.animalName,
-            animalId: a.animalId,
+          // Load payment history
+          this.existingPayments = (reg.payments ?? []).map((p: any) => ({
+            id: p.id,
+            method: p.method,
+            amount: p.amount,
+            paidAt: p.paidAt,
+            reference: p.reference,
+            currency: p.currency,
           }));
-        }
-        if (reg.items?.length) {
-          this.model.items = reg.items.map((i: any) => ({
-            itemType: i.itemType,
-            itemId: i.itemId,
-            speciesId: i.speciesId,
-            sampleTypeId: i.sampleTypeId,
-          }));
-        }
+          this.paymentStatus = reg.paymentStatus ?? 'Unpaid';
+
+          if (reg.animals?.length) {
+            this.model.animals = reg.animals.map((a: any) => ({
+              speciesId: a.speciesId,
+              animalName: a.animalName,
+              animalId: a.animalId,
+            }));
+          }
+          if (reg.items?.length) {
+            this.model.items = reg.items.map((i: any) => ({
+              itemType: i.itemType,
+              itemId: i.itemId,
+              speciesId: i.speciesId,
+              sampleTypeId: i.sampleTypeId,
+              registrationItemId: i.id,
+              isNew: false,
+              price: i.price ?? 0,
+              vatAmount: (i.vatAmount ?? 0) / ((i.quantity ?? 1) || 1),
+            }));
+          }
+
+          this.rebuildCaches();
+          this.cdr.detectChanges();
+        });
       },
       error: () => {
-        this.errorMessage = 'Failed to load registration for editing.';
+        this.ngZone.run(() => {
+          this.errorMessage = 'Failed to load registration for editing.';
+          this.cdr.detectChanges();
+        });
       },
     });
   }
@@ -1233,11 +1268,16 @@ export class RegistrationFormComponent implements AfterViewInit {
     const orderable = this.orderables.find(
       (o) => o.itemType === state.type && o.id === state.itemId,
     );
+    const info = this.priceInfo(state.type, state.itemId);
     this.model.items.push({
       itemType: state.type,
       itemId: state.itemId,
       speciesId: speciesId,
       sampleTypeId: orderable?.sampleTypeId ?? null,
+      registrationItemId: null,
+      isNew: true,
+      price: info.rate,
+      vatAmount: info.rate > 0 ? Math.round(info.rate * info.vatRate) / 100 : 0,
     });
     state.itemId = null;
     this.rebuildItemsBySpeciesCache();
